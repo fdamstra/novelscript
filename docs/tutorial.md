@@ -53,6 +53,7 @@ binding.
 ```
 let numbers = [1, 2, 3, 4, 5]             -- List[Num]
 let config = #{"host": "localhost", "port": "8080"}  -- Map[Text, Text]
+let pair = (3, "hello")                    -- (Num, Text) tuple
 ```
 
 Lists and maps are immutable. Operations on them return new values:
@@ -60,6 +61,15 @@ Lists and maps are immutable. Operations on them return new values:
 ```
 let more = numbers |> append(6)       -- [1, 2, 3, 4, 5, 6]
 -- numbers is still [1, 2, 3, 4, 5]
+```
+
+Tuples are fixed-size groups of values that can have different types. They're useful
+for returning multiple values from a function or grouping related data without
+defining a shape. Destructure them in patterns or lambda parameters:
+
+```
+let (x, y) = pair               -- x is 3, y is "hello"
+[(1, "a"), (2, "b")] |> each((n, s) => print("{n}: {s}"))
 ```
 
 ### String Interpolation
@@ -660,6 +670,7 @@ end
 | Conditional          | `match case guard => e else => e end`          |
 | Shape                | `shape S { field: Type }`                      |
 | Shape update         | `s |> with(field: value)`                      |
+| Tuple                | `(1, "hello")`                                 |
 | List                 | `[1, 2, 3]`                                   |
 | Map                  | `#{"key": value}`                              |
 | Range (inclusive)    | `1 to 10`                                      |

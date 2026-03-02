@@ -1,0 +1,2733 @@
+$ claude
+
+ ▐▛███▜▌   Claude Code v2.1.63
+▝▜█████▛▘  Opus 4.6 · Claude Pro
+  ▘▘ ▝▝    ~/src/novelscript
+
+❯ /model opus
+  ⎿  Set model to opus (claude-opus-4-6)
+
+❯ Please review the documents in @docs/ for completeness and correctness.
+  ⎿  Listed directory docs/
+
+⏺ Read 2 files (ctrl+o to expand)
+
+⏺ Here's my review of both documents. I'll organize by severity.
+
+  ---
+  Specification Issues
+
+  Truncated/Incomplete Content
+
+  1. Section 1, Principle 8 is cut off (spec:28-29) — "No hidden conversions, no implicit returns from" ends
+  mid-sentence.
+
+  Missing from Type System
+
+  2. Tuples are used but never defined — Tuple patterns appear in Section 6.3 ((a, b)), the Fibonacci example (line
+  731-733), and the Stack.pop return type in the tutorial. But there's no Tuple entry in Section 3.2 (Composite Types).
+  Need a formal definition with syntax for tuple types like (Num, Text).
+
+  Operators/Syntax Not Documented
+
+  3. // (floor division) missing from Section 2.5 — Introduced in Section 3.1 and present in the grammar (line 950), but
+   not listed in the Operators and Punctuation table.
+  4. // missing from precedence table (Section 2.6) — Should be grouped with *, /, % at precedence 6.
+  5. >> (bijection composition) missing from Section 2.5 and 2.6 — Used in Section 9.3 but never listed as an operator.
+  6. to and until missing from precedence table — They're keywords that act as infix operators for ranges, but their
+  precedence relative to other operators is unspecified.
+
+  Grammar Deficiencies (Section 15)
+
+  7. Pipeline RHS too restrictive (line 944) — pipeline ::= conditional (('|>' | '|?>') IDENT call_args?)* only allows a
+   bare identifier. It should allow dotted access like Circle.area and method chains like celsius_fahrenheit.rev.
+  Something like IDENT ('.' IDENT)* call_args?.
+  8. Trailing block lambda syntax missing from grammar — Section 4.5 (line 237) shows |> map do |n| ... end using
+  |param| for lambda parameters, but the lambda production in the grammar (lines 961-962) doesn't describe this form at
+  all.
+  9. Map patterns missing from grammar — The pattern production (line 958) doesn't include map patterns, even though
+  #{"key": v} patterns are shown in Section 6.3.
+  10. with syntax unaccounted for — with(field: value) uses keyword-argument-like syntax that doesn't exist elsewhere in
+   the language. The grammar doesn't describe it. Is with special syntax or a function? If it's a function, how do named
+   field updates work?
+
+  Standard Library Gaps
+
+  11. unwrap, unwrap_or, unwrap_or_else — Used in tutorial (line 341-343) but missing from the spec's standard library.
+  12. to_stream — Used in spec (line 688) but not in standard library.
+  13. upper_first — Used in spec example (line 421) but not in standard library.
+  14. each — Listed only as a stream terminal operation (line 711), but used throughout on lists directly. Should
+  clarify that list operations implicitly work via streams, or add each to the List section.
+  15. join — Listed only for streams (line 717) but used on lists in examples (line 425). Same issue as each.
+  16. append on streams — Tutorial line 461 uses |> append(1) on a stream, but append is only defined for List[T] in
+  Section 12.4.
+
+  Semantic Ambiguities
+
+  17. stream and collect are keywords AND function-like — Both are listed as keywords (line 56) but used with function
+  call syntax: stream(0, n => n + 2), |> collect. The spec should clarify whether these are special forms that look like
+   functions, or just built-in functions (in which case they shouldn't be keywords).
+  18. Anonymous shape type syntax unexplained — Section 5.4 (line 337) shows type Point3D = { x: Num, y: Num, z: Num }
+  using inline { field: Type } syntax. This anonymous record type isn't described anywhere else. Can it be used outside
+  of type aliases?
+  19. # in punctuation — Listed in Section 2.5 (line 81) but its role as the map literal prefix (#{...}) isn't explained
+   in the operators section.
+
+  ---
+  Tutorial Issues
+
+  20. Collatz example has a subtle problem (tutorial line 454-458) — Once the sequence hits 1, stream(n, x => ...) keeps
+   producing 1 forever. The take_while(x => x != 1) excludes the final 1, then |> append(1) adds it back. This works but
+   relies on append working on streams (not documented in stdlib). Also, stream here needs to produce values by
+  iterating, but the stream would never naturally terminate — worth noting this is an infinite stream pattern.
+  21. sort_by lambda with tuple destructuring (tutorial line 615) — sort_by((_, count) => -count) destructures a tuple
+  in the lambda parameter. Tuple destructuring in lambda parameters isn't explicitly described in the spec.
+
+  ---
+  Cross-Document Consistency Issues
+
+  22. return keyword behavior undocumented — Listed as a keyword (line 56), appears in the grammar (line 969), tutorial
+  mentions it exists (line 91: "though it exists for early returns"), but the spec never describes its semantics. Can it
+   be used in any do...end block? Only in functions? What about in lambdas?
+  23. List vs Stream operation overlap — The spec puts map, filter, take, sort, etc. under Streams (Section 11.2), but
+  examples throughout both documents use them directly on lists. The spec needs a clear statement about whether lists
+  auto-convert to streams when piped into these operations, or whether these are overloaded for both types.
+
+  ---
+  Summary
+
+  The most critical items to address:
+
+  - Fix the truncated Principle 8 (easy)
+  - Add Tuple to the type system (impacts type completeness)
+  - Add // and >> to operator tables (they're used but invisible)
+  - Fix the grammar — pipeline RHS, trailing block lambdas, map patterns, with syntax
+  - Clarify List vs Stream — the biggest conceptual gap; it's unclear how they relate at runtime
+  - Fill stdlib gaps — unwrap*, to_stream, upper_first, each/join on lists
+
+  The language design itself is solid and coherent. These are mostly documentation gaps rather than design flaws.
+
+✻ Brewed for 1m 23s
+
+❯ PLease correct the documents. Also make sure formatting is correct.
+
+⏺ Let me start by planning the fixes needed, then implement them systematically.
+
+⏺ Now let me work through the spec fixes. I'll make many edits in parallel where they don't conflict.
+
+  Fix 1: Truncated Principle 8, Fix 2: Add // and >> to operators table, Fix 3: Add // to precedence, add to/until and
+  >>
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 2 lines, removed 1 line
+      25  6. **No null** — The language has no null or nil. Optional values use `Option[T]`
+      26  (`some(v)` or `none`), errors use `Result[T, E]` (`ok(v)` or `err(e)`).
+      27  7. **Immutable by default** — Bindings are immutable unless explicitly declared `mut`.
+      28 -8. **Explicit over implicit** — No hidden conversions, no implicit returns from
+      28 +8. **Explicit over implicit** — No hidden conversions, no implicit coercions. Every
+      29 +value is produced by an expression; the last expression in a block is the result.
+      30
+      31  ---
+      32
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 4 lines, removed 2 lines
+      75      <-    mutation
+      76      =     binding
+      77      ++    concatenation
+      78 -    +  -  *  /  %    arithmetic
+      78 +    +  -  *  /  //  %    arithmetic (// is floor division)
+      79      ==  !=  <  >  <=  >=    comparison
+      80      ..    rest pattern / spread
+      81 +    >>    bijection composition
+      82      @     annotation prefix
+      82 -    ,  :  .  (  )  [  ]  {  }  #
+      83 +    #{}   map literal
+      84 +    ,  :  .  (  )  [  ]  {  }
+      85      ```
+      86
+      87  ### 2.6 Operator Precedence (highest to lowest)
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 8 lines, removed 4 lines
+      88
+      89      | Precedence | Operators              | Associativity |
+      90      |------------|------------------------|---------------|
+      91 -    | 7          | unary `-`, `not`       | right         |
+      92 -    | 6          | `*`, `/`, `%`          | left          |
+      93 -    | 5          | `+`, `-`               | left          |
+      94 -    | 4          | `++`                   | left          |
+      91 +    | 8          | unary `-`, `not`       | right         |
+      92 +    | 7          | `*`, `/`, `//`, `%`    | left          |
+      93 +    | 6          | `+`, `-`               | left          |
+      94 +    | 5          | `++`                   | left          |
+      95 +    | 4          | `to`, `until`          | none          |
+      96      | 3          | `==`, `!=`, `<`, `>`, `<=`, `>=` | none |
+      97      | 2          | `and`                  | left          |
+      98      | 1          | `or`                   | left          |
+     ...
+      101      Comparisons are non-associative: `a < b < c` is a syntax error. Use
+      102      `a < b and b < c`.
+      103
+      104 +    The `>>` operator composes bijections (see Section 9.3) and has lower
+      105 +    precedence than all of the above, used only in binding expressions.
+      106 +
+      107      ---
+      108
+      109  ## 3. Types
+
+⏺ Fix 4: Add Tuple to composite types
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 5 lines
+      125
+      126      | Type           | Description                | Literal / Constructor             |
+      127      |----------------|----------------------------|-----------------------------------|
+      128 +    | `(A, B, ...)`  | Tuple (fixed-size, heterogeneous) | `(1, "hello")`, `(a, b, c)` |
+      129      | `List[T]`      | Ordered, immutable list    | `[1, 2, 3]`                      |
+      130      | `Map[K, V]`    | Key-value map              | `#{"a": 1, "b": 2}`              |
+      131      | `Option[T]`    | Optional value             | `some(42)`, `none`                |
+      132      | `Result[T, E]` | Success or error           | `ok(42)`, `err("bad")`           |
+      133      | `Stream[T]`    | Lazy, possibly infinite    | constructed via `stream` function |
+      134
+      135 +    Tuples are fixed-length, ordered collections of possibly different types.
+      136 +    They are constructed with parentheses and can be destructured in patterns
+      137 +    and lambda parameters: `(a, b) => a + b`.
+      138 +
+      139  ### 3.3 Shape Types
+      140
+      141      Shapes are named structural types (see Section 8).
+
+⏺ Fix 5: Clarify stream/collect as keywords vs functions, and List vs Stream relationship
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 5 lines
+      686      NovelScript has **no loop constructs** (`for`, `while`, `loop`). All iteration is
+      687      accomplished through streams, pipelines, and recursion.
+      688
+      689 +    Stream operations such as `map`, `filter`, `take`, `each`, `reduce`, `join`,
+      690 +    and others work on both lists and streams. When called on a list, the list is
+      691 +    implicitly converted to a stream. Terminal operations that produce a collection
+      692 +    (like `collect`) return a `List`.
+      693 +
+      694  ### 11.1 Creating Streams
+      695
+      696      ```
+
+⏺ Fix 6: Clarify stream and collect in keywords section
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 4 lines, removed 1 line
+      54      fn  let  mut  match  case  else  do  end  shape  module  use  as
+      55      require  ensure  proof  assert  biject  forward  reverse  with
+      56      true  false  none  some  ok  err  and  or  not  to  until
+      57 -    return  stream  collect  type
+      57 +    return  type
+      58      ```
+      59
+      60 +    `stream` and `collect` are built-in functions, not keywords. They use
+      61 +    standard function-call syntax but are provided by the runtime.
+      62 +
+      63  ### 2.4 Identifiers
+      64
+      65      Identifiers begin with a letter or underscore, followed by letters, digits, or
+
+⏺ Fix 7: Add return semantics, Fix 8: Document with syntax
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 19 lines
+      232      -- result is 30
+      233      ```
+      234
+      235 +### 4.5 Early Return
+      236 +
+      237 +    The `return` keyword exits the enclosing function immediately with the given
+      238 +    value:
+      239 +
+      240 +    ```
+      241 +    fn find_index(items: List[Text], target: Text) -> Option[Num] do
+      242 +    items |> enumerate |> each((i, item) =>
+      243 +        match item == target
+      244 +        case true => return some(i)
+      245 +        case false => ()
+      246 +        end
+      247 +    )
+      248 +    none
+      249 +    end
+      250 +    ```
+      251 +
+      252 +    `return` applies to the nearest enclosing `fn`, not to lambdas or `do` blocks.
+      253 +
+      254  ### 4.5 Lambda Expressions
+      255
+      256      ```
+
+⏺ Now I need to renumber the subsequent subsections in Section 4 (4.5 Lambda becomes 4.6, 4.6 Range becomes 4.7).
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line, removed 1 line
+      251
+      252      `return` applies to the nearest enclosing `fn`, not to lambdas or `do` blocks.
+      253
+      254 -### 4.5 Lambda Expressions
+      254 +### 4.6 Lambda Expressions
+      255
+      256      ```
+      257      n => n * 2                         -- single parameter
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line, removed 1 line
+      275      -- [3, 5, 7]
+      276      ```
+      277
+      278 -### 4.6 Range Expressions
+      278 +### 4.7 Range Expressions
+      279
+      280      ```
+      281      1 to 5       -- [1, 2, 3, 4, 5]     (inclusive)
+
+⏺ Fix 9: Document with as special syntax in the Shapes section
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 7 lines, removed 2 lines
+      550  Since shapes are immutable, `with` creates a copy with updated fields:
+      551
+      552      ```
+      553 -let older_alice = alice |> with(age: 31)
+      553 +    let older_alice = alice |> with(age: 31)
+      554      -- older_alice.age is 31, all other fields unchanged
+      555      ```
+      556
+      557      Multiple fields can be updated:
+      558
+      559      ```
+      560 -let updated = alice |> with(age: 31, email: none)
+      560 +    let updated = alice |> with(age: 31, email: none)
+      561      ```
+      562
+      563 +    `with` is special syntax, not a regular function. Its arguments use
+      564 +    `field_name: value` syntax (like shape construction) rather than positional
+      565 +    arguments. It can be used in pipelines or called directly:
+      566 +    `with(alice, age: 31)`.
+      567 +
+      568  ### 8.5 Shape Methods
+      569
+      570      Functions can be associated with a shape by defining them inside a module of the same
+
+⏺ Fix 10: Add missing standard library functions
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line
+      822      length(t: Text) -> Num              -- also works on List
+      823      upper(t: Text) -> Text
+      824      lower(t: Text) -> Text
+      825 +    upper_first(t: Text) -> Text        -- capitalize first character
+      826      trim(t: Text) -> Text
+      827      split(t: Text, sep: Text) -> List[Text]
+      828      contains(t: Text, sub: Text) -> Bool
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 13 lines, removed 1 line
+      860      merge(a: Map[K, V], b: Map[K, V]) -> Map[K, V]
+      861      ```
+      862
+      863 -### 12.6 Convert
+      863 +### 12.6 Option & Result
+      864
+      865      ```
+      866 +    unwrap(o: Option[T]) -> T                    -- panics on none
+      867 +    unwrap(r: Result[T, E]) -> T                 -- panics on err
+      868 +    unwrap_or(o: Option[T], default: T) -> T     -- returns default on none
+      869 +    unwrap_or(r: Result[T, E], default: T) -> T  -- returns default on err
+      870 +    unwrap_or_else(o: Option[T], fn: () -> T) -> T
+      871 +    unwrap_or_else(r: Result[T, E], fn: () -> T) -> T
+      872 +    ```
+      873 +
+      874 +### 12.7 Convert
+      875 +
+      876 +    ```
+      877      to_text(value) -> Text
+      878      to_num(t: Text) -> Result[Num, Text]
+      879 +    to_stream(l: List[T]) -> Stream[T]
+      880      ```
+      881
+      882  ### 12.7 Functional
+
+⏺ Now renumber the old 12.7 Functional to 12.8:
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line, removed 1 line
+      879      to_stream(l: List[T]) -> Stream[T]
+      880      ```
+      881
+      882 -### 12.7 Functional
+      882 +### 12.8 Functional
+      883
+      884      ```
+      885      identity(x: T) -> T                 -- returns its argument
+
+⏺ Fix 11: Add stream to the Functional/built-in section and add append to stream ops
+
+⏺ Update(docs/specification.md)
+  ⎿  Error editing file
+
+⏺ Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 7 lines, removed 5 lines
+      882  ### 12.8 Functional
+      883
+      884      ```
+      885 -    identity(x: T) -> T                 -- returns its argument
+      886 -compose(f, g) -> fn                  -- compose two functions: compose(f, g)(x) = f(g(x))
+      887 -    tap(value: T, fn: (T) -> Void) -> T -- side effect, returns value unchanged
+      888 -    inspect(value: T) -> T              -- debug print, returns value
+      889 -    inspect(label: Text, value: T) -> T -- debug print with label
+      885 +    identity(x: T) -> T                  -- returns its argument
+      886 +    compose(f, g) -> fn                   -- compose: compose(f, g)(x) = f(g(x))
+      887 +    tap(value: T, fn: (T) -> Void) -> T  -- side effect, returns value unchanged
+      888 +    inspect(value: T) -> T               -- debug print, returns value
+      889 +    inspect(label: Text, value: T) -> T  -- debug print with label
+      890 +    stream(init: T, fn: (T) -> T) -> Stream[T]  -- infinite stream from seed + step
+      891 +    collect(s: Stream[T]) -> List[T]     -- materialize stream into list
+      892      ```
+      893
+      894      ---
+
+⏺ Fix 12: Add append to stream operations list
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line
+      748      stream |> enumerate          -- pair each element with its index
+      749      stream |> flat_map(fn)       -- map then flatten
+      750      stream |> chunk(n)           -- group into chunks of n
+      751 +    stream |> append(value)      -- append an element to end of stream
+      752
+      753  -- Terminal operations (force evaluation)
+      754      stream |> collect            -- collect into a List
+
+⏺ Fix 13: Fix the formal grammar — pipeline RHS, trailing block lambdas, map patterns, with, tuples, range
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Now replace the entire grammar section with a properly formatted and corrected version:
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 64 lines, removed 47 lines
+       971  ## 15. Formal Grammar (Simplified)
+       972
+       973      ```
+       974 -    program        ::= declaration*
+       975 -    declaration    ::= fn_decl | shape_decl | module_decl | use_decl
+       976 -    | biject_decl | proof_decl | type_decl | expression
+       974 +    program          ::= declaration*
+       975 +    declaration      ::= fn_decl | shape_decl | module_decl | use_decl
+       976 +                       | biject_decl | proof_decl | type_decl | expression
+       977
+       978 -    fn_decl        ::= annotation* 'fn' IDENT type_params? '(' params ')' ('->' type)?
+       979 -    contract* 'do' block 'end'
+       980 -    contract       ::= 'require' expression | 'ensure' expression
+       981 -    params         ::= (param (',' param)*)?
+       982 -    param          ::= IDENT (':' type)?
+       983 -    type_params    ::= '[' IDENT (',' IDENT)* ']'
+       978 +    fn_decl          ::= annotation* 'fn' IDENT type_params? '(' params ')'
+       979 +                         ('->' type)? contract* 'do' block 'end'
+       980 +    contract         ::= 'require' expression | 'ensure' expression
+       981 +    params           ::= (param (',' param)*)?
+       982 +    param            ::= IDENT (':' type)?
+       983 +    type_params      ::= '[' IDENT (',' IDENT)* ']'
+       984
+       985 -    shape_decl     ::= 'shape' IDENT type_params? '{' field (',' field)* '}'
+       986 -    field          ::= IDENT ':' type
+       985 +    shape_decl       ::= 'shape' IDENT type_params? '{' field (',' field)* '}'
+       986 +    field            ::= IDENT ':' type
+       987
+       988 -    module_decl    ::= 'module' IDENT 'do' declaration* 'end'
+       988 +    module_decl      ::= 'module' IDENT 'do' declaration* 'end'
+       989
+       990 -    use_decl       ::= 'use' module_path ('as' IDENT)?
+       991 -    | 'use' module_path '.{' IDENT (',' IDENT)* '}'
+       992 -        module_path    ::= IDENT ('.' IDENT)*
+       990 +    use_decl         ::= 'use' module_path ('as' IDENT)?
+       991 +                       | 'use' module_path '.{' IDENT (',' IDENT)* '}'
+       992 +    module_path      ::= IDENT ('.' IDENT)*
+       993
+       994 -            biject_decl    ::= 'biject' IDENT '(' param ')' '<->' '(' param ')'
+       995 -            'forward' 'do' block 'end'
+       996 -            'reverse' 'do' block 'end'
+       997 -            'end'
+       994 +    biject_decl      ::= 'biject' IDENT '(' param ')' '<->' '(' param ')'
+       995 +                         'forward' 'do' block 'end'
+       996 +                         'reverse' 'do' block 'end'
+       997 +                         'end'
+       998
+       999 -            proof_decl     ::= 'proof' STRING 'do' block 'end'
+       999 +    proof_decl       ::= 'proof' STRING 'do' block 'end'
+      1000
+      1001 -            type_decl      ::= 'type' IDENT type_params? '=' type
+      1001 +    type_decl        ::= 'type' IDENT type_params? '=' type
+      1002
+      1003 -            expression     ::= pipeline
+      1004 -            pipeline       ::= conditional (('|>' | '|?>') IDENT call_args?)*
+      1005 -            conditional    ::= or_expr
+      1006 -            or_expr        ::= and_expr ('or' and_expr)*
+      1007 -            and_expr       ::= comparison ('and' comparison)*
+      1008 -            comparison     ::= addition (comp_op addition)?
+      1009 -            addition       ::= multiplication (('+' | '-' | '++') multiplication)*
+      1010 -            multiplication ::= unary (('*' | '/' | '//' | '%') unary)*
+      1011 -            unary          ::= ('-' | 'not') unary | postfix
+      1012 -            postfix        ::= primary ('.' IDENT | '[' expression ']' | call_args)*
+      1013 -            primary        ::= literal | IDENT | '(' expression ')' | block_expr
+      1014 -            | match_expr | lambda | list | map
+      1003 +    expression       ::= pipeline
+      1004 +    pipeline         ::= conditional (('|>' | '|?>') pipe_target)*
+      1005 +    pipe_target      ::= dotted_name call_args?
+      1006 +                       | dotted_name trailing_block
+      1007 +    dotted_name      ::= IDENT ('.' IDENT)*
+      1008 +    conditional      ::= or_expr
+      1009 +    or_expr          ::= and_expr ('or' and_expr)*
+      1010 +    and_expr         ::= comparison ('and' comparison)*
+      1011 +    comparison       ::= range_expr (comp_op range_expr)?
+      1012 +    range_expr       ::= addition (('to' | 'until') addition)?
+      1013 +    addition         ::= multiplication (('+' | '-' | '++') multiplication)*
+      1014 +    multiplication   ::= unary (('*' | '/' | '//' | '%') unary)*
+      1015 +    unary            ::= ('-' | 'not') unary | postfix
+      1016 +    postfix          ::= primary ('.' IDENT | '[' expression ']' | call_args)*
+      1017 +    primary          ::= literal | IDENT | '(' expression ')' | block_expr
+      1018 +                       | match_expr | lambda | list | map | tuple
+      1019
+      1016 -            match_expr     ::= 'match' expression? case_clause+ ('else' '=>' expression)? 'end'
+      1017 -            case_clause    ::= 'case' pattern ('when' expression)? '=>' expression
+      1018 -            pattern        ::= literal | IDENT | '_' | list_pattern | shape_pattern
+      1019 -            | option_pattern | result_pattern | tuple_pattern
+      1020 +    match_expr       ::= 'match' expression? case_clause+
+      1021 +                         ('else' '=>' expression)? 'end'
+      1022 +    case_clause      ::= 'case' pattern ('when' expression)? '=>' expression
+      1023
+      1021 -            lambda         ::= params '=>' expression
+      1022 -            | params '=>' 'do' block 'end'
+      1024 +    pattern          ::= literal | IDENT | '_'
+      1025 +                       | list_pattern | map_pattern | shape_pattern
+      1026 +                       | option_pattern | result_pattern | tuple_pattern
+      1027 +    list_pattern     ::= '[' (pattern (',' pattern)* ('..' IDENT)?)? ']'
+      1028 +    map_pattern      ::= '#{' STRING ':' pattern (',' STRING ':' pattern)* '}'
+      1029 +    tuple_pattern    ::= '(' pattern ',' pattern (',' pattern)* ')'
+      1030
+      1024 -            block_expr     ::= 'do' block 'end'
+      1025 -            block          ::= (statement)*
+      1026 -            statement      ::= 'let' 'mut'? IDENT (':' type)? '=' expression
+      1027 -            | IDENT '<-' expression
+      1028 -            | 'assert' expression
+      1029 -            | 'return' expression
+      1030 -            | expression
+      1031 -            ```
+      1031 +    lambda           ::= param_list '=>' expression
+      1032 +                       | param_list '=>' 'do' block 'end'
+      1033 +    trailing_block   ::= 'do' '|' params '|' block 'end'
+      1034 +    param_list       ::= IDENT | '(' params ')' | '(' ')'
+      1035
+      1036 +    with_expr        ::= 'with' '(' with_arg (',' with_arg)* ')'
+      1037 +    with_arg         ::= IDENT ':' expression
+      1038 +
+      1039 +    tuple            ::= '(' expression ',' expression (',' expression)* ')'
+      1040 +
+      1041 +    block_expr       ::= 'do' block 'end'
+      1042 +    block            ::= statement*
+      1043 +    statement        ::= 'let' 'mut'? IDENT (':' type)? '=' expression
+      1044 +                       | IDENT '<-' expression
+      1045 +                       | 'assert' expression
+      1046 +                       | 'return' expression
+      1047 +                       | expression
+      1048 +    ```
+      1049 +
+      1050              ---
+      1051
+      1052  ## 16. Interpreter Flags
+
+⏺ Fix 14: Fix inconsistent indentation throughout the spec
+
+  Let me check the overall formatting now.
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ The spec has very inconsistent indentation — some sections have leading spaces, code blocks have inconsistent
+  indentation, etc. Let me do a comprehensive rewrite of the file with consistent formatting.
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ The formatting is very inconsistent — random indentation levels throughout. Let me do a full rewrite with clean,
+  consistent formatting.
+
+⏺ Write(docs/specification.md)
+  ⎿  Added 683 lines, removed 678 lines
+      11  ### Core Principles
+      12
+      13  1. **Pipeline-first computation** — Data flows left-to-right through transformations.
+      14 -Nested function calls are replaced by pipelines, eliminating precedence confusion.
+      14 +   Nested function calls are replaced by pipelines, eliminating precedence confusion.
+      15  2. **One way to branch** — Pattern matching is the sole branching mechanism. There is
+      16 -no `if`, `else`, `switch`, or `cond`. This eliminates choice paralysis for code
+      17 -generators and ensures exhaustive case handling.
+      16 +   no `if`, `else`, `switch`, or `cond`. This eliminates choice paralysis for code
+      17 +   generators and ensures exhaustive case handling.
+      18  3. **Contracts are code** — Preconditions (`require`) and postconditions (`ensure`) are
+      19 -part of function signatures, checked at runtime by default.
+      19 +   part of function signatures, checked at runtime by default.
+      20  4. **Proofs live with code** — Inline test blocks (`proof`) are first-class language
+      21 -constructs, not a separate framework. They execute as part of the program and halt
+      22 -on failure.
+      21 +   constructs, not a separate framework. They execute as part of the program and halt
+      22 +   on failure.
+      23  5. **Bijections** — Bidirectional functions can be defined once and used in either
+      24 -direction. Useful for encoding/decoding, serialization, unit conversion, and more.
+      24 +   direction. Useful for encoding/decoding, serialization, unit conversion, and more.
+      25  6. **No null** — The language has no null or nil. Optional values use `Option[T]`
+      26 -(`some(v)` or `none`), errors use `Result[T, E]` (`ok(v)` or `err(e)`).
+      26 +   (`some(v)` or `none`), errors use `Result[T, E]` (`ok(v)` or `err(e)`).
+      27  7. **Immutable by default** — Bindings are immutable unless explicitly declared `mut`.
+      28  8. **Explicit over implicit** — No hidden conversions, no implicit coercions. Every
+      29 -value is produced by an expression; the last expression in a block is the result.
+      29 +   value is produced by an expression; the last expression in a block is the result.
+      30
+      31  ---
+      32
+     ...
+       35  ### 2.1 Character Set
+       36
+       37  Source files are UTF-8 encoded. Identifiers and keywords use ASCII letters, digits,
+       38 -       and underscores. String literals may contain any UTF-8 text.
+       38 +and underscores. String literals may contain any UTF-8 text.
+       39
+       40  ### 2.2 Comments
+       41
+       42 -       ```
+       43 -       -- This is a single-line comment
+       42 +```
+       43 +-- This is a single-line comment
+       44
+       45  {- This is a
+       46 -    multi-line comment -}
+       47 -    ```
+       46 +   multi-line comment -}
+       47 +```
+       48
+       49 -    Multi-line comments nest: `{- outer {- inner -} still outer -}`.
+       49 +Multi-line comments nest: `{- outer {- inner -} still outer -}`.
+       50
+       51  ### 2.3 Keywords
+       52
+       53 -    ```
+       54 -    fn  let  mut  match  case  else  do  end  shape  module  use  as
+       55 -    require  ensure  proof  assert  biject  forward  reverse  with
+       56 -    true  false  none  some  ok  err  and  or  not  to  until
+       57 -    return  type
+       58 -    ```
+       53 +```
+       54 +fn  let  mut  match  case  else  do  end  shape  module  use  as
+       55 +require  ensure  proof  assert  biject  forward  reverse  with
+       56 +true  false  none  some  ok  err  and  or  not  to  until
+       57 +return  type
+       58 +```
+       59
+       60 -    `stream` and `collect` are built-in functions, not keywords. They use
+       61 -    standard function-call syntax but are provided by the runtime.
+       60 +`stream` and `collect` are built-in functions, not keywords. They use standard
+       61 +function-call syntax but are provided by the runtime.
+       62
+       63  ### 2.4 Identifiers
+       64
+       65 -    Identifiers begin with a letter or underscore, followed by letters, digits, or
+       66 -    underscores. By convention:
+       67 -    - Variables and functions: `snake_case`
+       68 -    - Shapes and type names: `PascalCase`
+       69 -    - Module names: `PascalCase`
+       70 -    - Constants: `UPPER_SNAKE_CASE`
+       65 +Identifiers begin with a letter or underscore, followed by letters, digits, or
+       66 +underscores. By convention:
+       67
+       68 +- Variables and functions: `snake_case`
+       69 +- Shapes and type names: `PascalCase`
+       70 +- Module names: `PascalCase`
+       71 +- Constants: `UPPER_SNAKE_CASE`
+       72 +
+       73  ### 2.5 Operators and Punctuation
+       74
+       74 -    ```
+       75 -    |>    pipeline
+       75 +```
+       76 +|>    pipeline
+       77  |?>   conditional pipeline (propagates err/none)
+       77 -    =>    case arrow / lambda arrow
+       78 -    <-    mutation
+       79 -    =     binding
+       80 -    ++    concatenation
+       81 -    +  -  *  /  //  %    arithmetic (// is floor division)
+       82 -    ==  !=  <  >  <=  >=    comparison
+       83 -    ..    rest pattern / spread
+       84 -    >>    bijection composition
+       85 -    @     annotation prefix
+       86 -    #{}   map literal
+       87 -    ,  :  .  (  )  [  ]  {  }
+       88 -    ```
+       78 +=>    case arrow / lambda arrow
+       79 +<-    mutation
+       80 +=     binding
+       81 +++    concatenation
+       82 ++  -  *  /  //  %    arithmetic (// is floor division)
+       83 +==  !=  <  >  <=  >=    comparison
+       84 +..    rest pattern / spread
+       85 +>>    bijection composition
+       86 +@     annotation prefix
+       87 +#{}   map literal
+       88 +,  :  .  (  )  [  ]  {  }
+       89 +```
+       90
+       91  ### 2.6 Operator Precedence (highest to lowest)
+       92
+       92 -    | Precedence | Operators              | Associativity |
+       93 -    |------------|------------------------|---------------|
+       94 -    | 8          | unary `-`, `not`       | right         |
+       95 -    | 7          | `*`, `/`, `//`, `%`    | left          |
+       96 -    | 6          | `+`, `-`               | left          |
+       97 -    | 5          | `++`                   | left          |
+       98 -    | 4          | `to`, `until`          | none          |
+       99 -    | 3          | `==`, `!=`, `<`, `>`, `<=`, `>=` | none |
+      100 -    | 2          | `and`                  | left          |
+      101 -    | 1          | `or`                   | left          |
+      102 -    | 0          | `|>`, `|?>`            | left          |
+       93 +| Precedence | Operators                              | Associativity |
+       94 +|------------|----------------------------------------|---------------|
+       95 +| 8          | unary `-`, `not`                       | right         |
+       96 +| 7          | `*`, `/`, `//`, `%`                    | left          |
+       97 +| 6          | `+`, `-`                               | left          |
+       98 +| 5          | `++`                                   | left          |
+       99 +| 4          | `to`, `until`                          | none          |
+      100 +| 3          | `==`, `!=`, `<`, `>`, `<=`, `>=`       | none          |
+      101 +| 2          | `and`                                  | left          |
+      102 +| 1          | `or`                                   | left          |
+      103 +| 0          | `|>`, `|?>`                            | left          |
+      104
+      104 -    Comparisons are non-associative: `a < b < c` is a syntax error. Use
+      105 -    `a < b and b < c`.
+      105 +Comparisons are non-associative: `a < b < c` is a syntax error. Use
+      106 +`a < b and b < c`.
+      107
+      107 -    The `>>` operator composes bijections (see Section 9.3) and has lower
+      108 -    precedence than all of the above, used only in binding expressions.
+      108 +The `>>` operator composes bijections (see Section 9.3) and has lower precedence
+      109 +than all of the above, used only in binding expressions.
+      110
+      110 -    ---
+      111 +---
+      112
+      113  ## 3. Types
+      114
+      115  ### 3.1 Primitive Types
+      116
+      116 -    | Type   | Description                  | Literals                    |
+      117 -    |--------|------------------------------|-----------------------------|
+      118 -    | `Num`  | Arbitrary-precision number   | `42`, `3.14`, `-7`, `1_000` |
+      119 -    | `Text` | UTF-8 string                 | `"hello"`, `"line\n"`       |
+      120 -    | `Bool` | Boolean                      | `true`, `false`             |
+      121 -    | `Void` | No meaningful value          | (no literal)                |
+      117 +| Type   | Description                | Literals                    |
+      118 +|--------|----------------------------|-----------------------------|
+      119 +| `Num`  | Arbitrary-precision number | `42`, `3.14`, `-7`, `1_000` |
+      120 +| `Text` | UTF-8 string               | `"hello"`, `"line\n"`       |
+      121 +| `Bool` | Boolean                    | `true`, `false`             |
+      122 +| `Void` | No meaningful value        | (no literal)                |
+      123
+      123 -    `Num` is a unified numeric type. The interpreter uses integers when possible and
+      124 -    floats when necessary. Integer division is performed with `//` (floor division), while
+      125 -    `/` is true division.
+      124 +`Num` is a unified numeric type. The interpreter uses integers when possible and
+      125 +floats when necessary. Integer division is performed with `//` (floor division),
+      126 +while `/` is true division.
+      127
+      128  ### 3.2 Composite Types
+      129
+      129 -    | Type           | Description                | Literal / Constructor             |
+      130 -    |----------------|----------------------------|-----------------------------------|
+      131 -    | `(A, B, ...)`  | Tuple (fixed-size, heterogeneous) | `(1, "hello")`, `(a, b, c)` |
+      132 -    | `List[T]`      | Ordered, immutable list    | `[1, 2, 3]`                      |
+      133 -    | `Map[K, V]`    | Key-value map              | `#{"a": 1, "b": 2}`              |
+      134 -    | `Option[T]`    | Optional value             | `some(42)`, `none`                |
+      135 -    | `Result[T, E]` | Success or error           | `ok(42)`, `err("bad")`           |
+      136 -    | `Stream[T]`    | Lazy, possibly infinite    | constructed via `stream` function |
+      130 +| Type           | Description                         | Literal / Constructor             |
+      131 +|----------------|-------------------------------------|-----------------------------------|
+      132 +| `(A, B, ...)`  | Tuple (fixed-size, heterogeneous)   | `(1, "hello")`, `(a, b, c)`      |
+      133 +| `List[T]`      | Ordered, immutable list             | `[1, 2, 3]`                      |
+      134 +| `Map[K, V]`    | Key-value map                       | `#{"a": 1, "b": 2}`              |
+      135 +| `Option[T]`    | Optional value                      | `some(42)`, `none`                |
+      136 +| `Result[T, E]` | Success or error                    | `ok(42)`, `err("bad")`           |
+      137 +| `Stream[T]`    | Lazy, possibly infinite             | constructed via `stream` function |
+      138
+      138 -    Tuples are fixed-length, ordered collections of possibly different types.
+      139 -    They are constructed with parentheses and can be destructured in patterns
+      140 -    and lambda parameters: `(a, b) => a + b`.
+      139 +Tuples are fixed-length, ordered collections of possibly different types. They are
+      140 +constructed with parentheses and can be destructured in patterns and lambda
+      141 +parameters: `(a, b) => a + b`.
+      142
+      143  ### 3.3 Shape Types
+      144
+      144 -    Shapes are named structural types (see Section 8).
+      145 +Shapes are named structural types (see Section 8).
+      146
+      147  ### 3.4 Function Types
+      148
+      148 -    Function types are written: `(ParamTypes) -> ReturnType`
+      149 +Function types are written: `(ParamTypes) -> ReturnType`
+      150
+      150 -    ```
+      151 -    (Num, Num) -> Num
+      152 -    (Text) -> Option[Text]
+      153 -    () -> Void
+      154 -    ```
+      151 +```
+      152 +(Num, Num) -> Num
+      153 +(Text) -> Option[Text]
+      154 +() -> Void
+      155 +```
+      156
+      157  ### 3.5 Type Parameters
+      158
+      158 -    Types and functions can be parameterized with square brackets:
+      159 +Types and functions can be parameterized with square brackets:
+      160
+      160 -    ```
+      161 -    shape Pair[A, B] {
+      162 -first: A,
+      163 -           second: B
+      164 -    }
+      161 +```
+      162 +shape Pair[A, B] {
+      163 +  first: A,
+      164 +  second: B
+      165 +}
+      166
+      167  fn identity[T](x: T) -> T do
+      167 -x
+      168 +  x
+      169  end
+      170  ```
+      171
+     ...
+      181
+      182  ### 4.1 Literals
+      183
+      183 -    ```
+      184 -    42                    -- Num (integer)
+      185 -    3.14                  -- Num (float)
+      184 +```
+      185 +42                    -- Num (integer)
+      186 +3.14                  -- Num (float)
+      187  1_000_000             -- Num (underscores ignored)
+      187 -    "hello"               -- Text
+      188 -    "value is {x + 1}"   -- Text with interpolation
+      189 -    true                  -- Bool
+      190 -    false                 -- Bool
+      191 -    [1, 2, 3]             -- List[Num]
+      188 +"hello"               -- Text
+      189 +"value is {x + 1}"   -- Text with interpolation
+      190 +true                  -- Bool
+      191 +false                 -- Bool
+      192 +[1, 2, 3]             -- List[Num]
+      193  #{"a": 1}             -- Map[Text, Num]
+      193 -    some(42)              -- Option[Num]
+      194 +(1, "hello")          -- (Num, Text) tuple
+      195 +some(42)              -- Option[Num]
+      196  none                  -- Option[T] (type inferred from context)
+      195 -    ok("success")         -- Result[Text, E]
+      196 -    err("failure")        -- Result[T, Text]
+      197 -    ```
+      197 +ok("success")         -- Result[Text, E]
+      198 +err("failure")        -- Result[T, Text]
+      199 +```
+      200
+      201  ### 4.2 String Interpolation
+      202
+      201 -    Curly braces inside double-quoted strings evaluate expressions:
+      203 +Curly braces inside double-quoted strings evaluate expressions:
+      204
+      203 -    ```
+      204 -    let name = "world"
+      205 -    "Hello, {name}!"          -- "Hello, world!"
+      206 -    "2 + 2 = {2 + 2}"         -- "2 + 2 = 4"
+      207 -    "items: {list |> length}"  -- "items: 5"
+      208 -    ```
+      205 +```
+      206 +let name = "world"
+      207 +"Hello, {name}!"          -- "Hello, world!"
+      208 +"2 + 2 = {2 + 2}"         -- "2 + 2 = 4"
+      209 +"items: {list |> length}"  -- "items: 5"
+      210 +```
+      211
+      210 -    Use `\{` for a literal brace: `"use \{braces\}"`.
+      212 +Use `\{` for a literal brace: `"use \{braces\}"`.
+      213
+      214  ### 4.3 Variable Binding
+      215
+      214 -    ```
+      215 -    let x = 42                -- immutable
+      216 -    let mut counter = 0        -- mutable
+      216 +```
+      217 +let x = 42                -- immutable
+      218 +let mut counter = 0        -- mutable
+      219  counter <- counter + 1     -- mutation (only on mut bindings)
+      218 -    ```
+      220 +```
+      221
+      220 -    Attempting to mutate an immutable binding is a compile-time error.
+      222 +Attempting to mutate an immutable binding is a compile-time error.
+      223
+      224  ### 4.4 Block Expressions
+      225
+      224 -    A `do...end` block is an expression that evaluates to its last expression:
+      226 +A `do...end` block is an expression that evaluates to its last expression:
+      227
+      226 -    ```
+      227 -    let result = do
+      228 -    let a = 10
+      229 -    let b = 20
+      230 -    a + b
+      231 -    end
+      232 -    -- result is 30
+      233 -    ```
+      228 +```
+      229 +let result = do
+      230 +  let a = 10
+      231 +  let b = 20
+      232 +  a + b
+      233 +end
+      234 +-- result is 30
+      235 +```
+      236
+      237  ### 4.5 Early Return
+      238
+      237 -    The `return` keyword exits the enclosing function immediately with the given
+      238 -    value:
+      239 +The `return` keyword exits the enclosing function immediately with the given value:
+      240
+      240 -    ```
+      241 -    fn find_index(items: List[Text], target: Text) -> Option[Num] do
+      242 -    items |> enumerate |> each((i, item) =>
+      243 -        match item == target
+      244 -        case true => return some(i)
+      245 -        case false => ()
+      246 -        end
+      247 -    )
+      248 -    none
+      241 +```
+      242 +fn find_index(items: List[Text], target: Text) -> Option[Num] do
+      243 +  items |> enumerate |> each((i, item) =>
+      244 +    match item == target
+      245 +      case true => return some(i)
+      246 +      case false => ()
+      247      end
+      250 -    ```
+      248 +  )
+      249 +  none
+      250 +end
+      251 +```
+      252
+      252 -    `return` applies to the nearest enclosing `fn`, not to lambdas or `do` blocks.
+      253 +`return` applies to the nearest enclosing `fn`, not to lambdas or `do` blocks.
+      254
+      255  ### 4.6 Lambda Expressions
+      256
+      256 -    ```
+      257 -    n => n * 2                         -- single parameter
+      258 -    (a, b) => a + b                    -- multiple parameters
+      259 -    () => print("hello")               -- no parameters
+      260 -    (items) => do                      -- multi-line (block) lambda
+      261 -    items
+      262 -    |> filter(n => n > 0)
+      263 -|> map(n => n * 2)
+      264 -    end
+      265 -    ```
+      257 +```
+      258 +n => n * 2                         -- single parameter
+      259 +(a, b) => a + b                    -- multiple parameters
+      260 +() => print("hello")               -- no parameters
+      261 +(items) => do                      -- multi-line (block) lambda
+      262 +  items
+      263 +  |> filter(n => n > 0)
+      264 +  |> map(n => n * 2)
+      265 +end
+      266 +```
+      267
+      267 -    When a lambda is the last argument to a function, it may be written as a trailing
+      268 -    block:
+      268 +When a lambda is the last argument to a function, it may be written as a trailing
+      269 +block. The parameters are delimited with `|...|`:
+      270
+      270 -    ```
+      271 -    [1, 2, 3] |> map do |n|
+      272 -    let doubled = n * 2
+      273 -    doubled + 1
+      274 -    end
+      275 -    -- [3, 5, 7]
+      276 -    ```
+      271 +```
+      272 +[1, 2, 3] |> map do |n|
+      273 +  let doubled = n * 2
+      274 +  doubled + 1
+      275 +end
+      276 +-- [3, 5, 7]
+      277 +```
+      278
+      279  ### 4.7 Range Expressions
+      280
+      280 -    ```
+      281 -    1 to 5       -- [1, 2, 3, 4, 5]     (inclusive)
+      281 +```
+      282 +1 to 5       -- [1, 2, 3, 4, 5]     (inclusive)
+      283  1 until 5    -- [1, 2, 3, 4]         (exclusive of end)
+      283 -    ```
+      284 +```
+      285
+      285 -    Ranges are lazy streams. They produce values on demand and can be used in pipelines.
+      286 +Ranges are lazy streams. They produce values on demand and can be used in pipelines.
+      287
+      287 -    ---
+      288 +---
+      289
+      290  ## 5. Declarations
+      291
+      292  ### 5.1 Function Declaration
+      293
+      293 -    ```
+      294 -    fn function_name(param1: Type1, param2: Type2) -> ReturnType
+      295 -    do
+      296 --- body (last expression is the return value)
+      297 -    end
+      298 -    ```
+      294 +```
+      295 +fn function_name(param1: Type1, param2: Type2) -> ReturnType
+      296 +do
+      297 +  -- body (last expression is the return value)
+      298 +end
+      299 +```
+      300
+      300 -    The return type can be omitted and will be inferred.
+      301 +The return type can be omitted and will be inferred.
+      302
+      303  #### Contracts
+      304
+      304 -    Functions may declare preconditions and postconditions:
+      305 +Functions may declare preconditions and postconditions:
+      306
+      306 -    ```
+      307 -    fn factorial(n: Num) -> Num
+      308 -    require n >= 0
+      309 -    require n == n // 1    -- n is an integer
+      310 -    ensure result >= 1
+      311 -    do
+      312 -    match n
+      307 +```
+      308 +fn factorial(n: Num) -> Num
+      309 +  require n >= 0
+      310 +  require n == n // 1    -- n is an integer
+      311 +  ensure result >= 1
+      312 +do
+      313 +  match n
+      314      case 0 => 1
+      314 -case n => n * factorial(n - 1)
+      315 -    end
+      316 -    end
+      317 -    ```
+      315 +    case n => n * factorial(n - 1)
+      316 +  end
+      317 +end
+      318 +```
+      319
+      319 -    - `require` — Checked before the function body executes. Failure raises a contract
+      320 -    violation with the expression that failed.
+      321 -    - `ensure` — Checked after the body executes. The special name `result` refers to the
+      322 -    return value.
+      320 +- `require` — Checked before the function body executes. Failure raises a contract
+      321 +  violation with the expression that failed.
+      322 +- `ensure` — Checked after the body executes. The special name `result` refers to
+      323 +  the return value.
+      324
+      324 -    Multiple `require` and `ensure` clauses are allowed. All are checked independently.
+      325 +Multiple `require` and `ensure` clauses are allowed. All are checked independently.
+      326
+      327  #### Intent Annotations
+      328
+      328 -    Functions may carry an `@intent` annotation describing their purpose in natural
+      329 -    language. This has no runtime effect but serves as machine-readable documentation:
+      329 +Functions may carry an `@intent` annotation describing their purpose in natural
+      330 +language. This has no runtime effect but serves as machine-readable documentation:
+      331
+      331 -    ```
+      332 -    @intent "Sort a list of numbers in ascending order using merge sort"
+      333 -    fn merge_sort(items: List[Num]) -> List[Num]
+      334 -    ensure result |> length == items |> length
+      335 -    do
+      336 -    -- implementation
+      337 -    end
+      338 -    ```
+      332 +```
+      333 +@intent "Sort a list of numbers in ascending order using merge sort"
+      334 +fn merge_sort(items: List[Num]) -> List[Num]
+      335 +  ensure result |> length == items |> length
+      336 +do
+      337 +  -- implementation
+      338 +end
+      339 +```
+      340
+      341  ### 5.2 Module Declaration
+      342
+      342 -    ```
+      343 -    module Geometry do
+      344 -    shape Point {
+      345 -x: Num,
+      346 -       y: Num
+      347 -    }
+      343 +```
+      344 +module Geometry do
+      345 +  shape Point {
+      346 +    x: Num,
+      347 +    y: Num
+      348 +  }
+      349
+      349 -    fn distance(a: Point, b: Point) -> Num do
+      350 -((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y))
+      350 +  fn distance(a: Point, b: Point) -> Num do
+      351 +    ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y))
+      352      |> sqrt
+      352 -    end
+      353 -    end
+      354 -    ```
+      353 +  end
+      354 +end
+      355 +```
+      356
+      356 -    Modules may be nested. Everything inside a module is accessible via dot notation:
+      357 -    `Geometry.distance(p1, p2)`.
+      357 +Modules may be nested. Everything inside a module is accessible via dot notation:
+      358 +`Geometry.distance(p1, p2)`.
+      359
+      360  ### 5.3 Use (Import) Declaration
+      361
+      361 -    ```
+      362 -    use Geometry                   -- import module, access via Geometry.distance
+      363 -    use Geometry.{Point, distance} -- import specific items into current scope
+      364 -    use Geometry as Geo            -- aliased import: Geo.distance
+      365 -    ```
+      362 +```
+      363 +use Geometry                   -- import module, access via Geometry.distance
+      364 +use Geometry.{Point, distance} -- import specific items into current scope
+      365 +use Geometry as Geo            -- aliased import: Geo.distance
+      366 +```
+      367
+      368  ### 5.4 Type Alias
+      369
+      369 -    ```
+      370 -    type Name = Text
+      371 -    type Point3D = { x: Num, y: Num, z: Num }
+      372 -    type Predicate[T] = (T) -> Bool
+      373 -    ```
+      370 +```
+      371 +type Name = Text
+      372 +type Predicate[T] = (T) -> Bool
+      373 +```
+      374
+      375 -    ---
+      375 +---
+      376
+      377  ## 6. Pattern Matching
+      378
+      379 -    Pattern matching is the **only** branching mechanism in NovelScript.
+      379 +Pattern matching is the **only** branching mechanism in NovelScript.
+      380
+      381  ### 6.1 Match Expression (with subject)
+      382
+      383 -    ```
+      384 -    match value
+      385 -    case pattern1 => expr1
+      386 -    case pattern2 => expr2
+      387 -    case _ => default_expr
+      388 -    end
+      389 -    ```
+      383 +```
+      384 +match value
+      385 +  case pattern1 => expr1
+      386 +  case pattern2 => expr2
+      387 +  case _ => default_expr
+      388 +end
+      389 +```
+      390
+      391  ### 6.2 Match Expression (without subject — conditional)
+      392
+      393 -    When no subject is given, each `case` acts as a boolean guard:
+      393 +When no subject is given, each `case` acts as a boolean guard:
+      394
+      395 -    ```
+      396 -    match
+      397 -    case x > 100 => "large"
+      398 -    case x > 10 => "medium"
+      399 -    case x > 0 => "small"
+      400 -    else => "non-positive"
+      401 -    end
+      402 -    ```
+      395 +```
+      396 +match
+      397 +  case x > 100 => "large"
+      398 +  case x > 10 => "medium"
+      399 +  case x > 0 => "small"
+      400 +  else => "non-positive"
+      401 +end
+      402 +```
+      403
+      404 -    Cases are evaluated top-to-bottom. The first matching case wins. `else` is equivalent
+      405 -    to `case _` or `case true`.
+      404 +Cases are evaluated top-to-bottom. The first matching case wins. `else` is equivalent
+      405 +to `case _` or `case true`.
+      406
+      407  ### 6.3 Pattern Forms
+      408
+      409 -    | Pattern                  | Matches                                      |
+      410 -    |--------------------------|----------------------------------------------|
+      411 -    | `42`, `"hello"`, `true`  | Literal equality                             |
+      412 -    | `x`                      | Any value, binds to `x`                      |
+      413 -    | `_`                      | Any value, no binding (wildcard)             |
+      414 -    | `[]`                     | Empty list                                   |
+      415 -    | `[a, b, c]`              | List of exactly 3 elements                   |
+      416 -    | `[head, ..tail]`         | List with at least 1 element, rest as `tail` |
+      417 -    | `[_, ..tail]`            | Same, discarding the head                    |
+      418 -    | `#{"key": v}`            | Map containing "key", binds value to `v`     |
+      419 -    | `ShapeName { field: p }` | Shape with field matching pattern `p`        |
+      420 -    | `some(x)`                | Option containing a value                    |
+      421 -    | `none`                   | Empty option                                 |
+      422 -    | `ok(x)`                  | Successful result                            |
+      423 -    | `err(e)`                 | Error result                                 |
+      424 -    | `(a, b)`                 | Tuple of two elements                        |
+      409 +| Pattern                  | Matches                                      |
+      410 +|--------------------------|----------------------------------------------|
+      411 +| `42`, `"hello"`, `true`  | Literal equality                             |
+      412 +| `x`                      | Any value, binds to `x`                      |
+      413 +| `_`                      | Any value, no binding (wildcard)             |
+      414 +| `[]`                     | Empty list                                   |
+      415 +| `[a, b, c]`              | List of exactly 3 elements                   |
+      416 +| `[head, ..tail]`         | List with at least 1 element, rest as `tail` |
+      417 +| `[_, ..tail]`            | Same, discarding the head                    |
+      418 +| `#{"key": v}`            | Map containing "key", binds value to `v`     |
+      419 +| `ShapeName { field: p }` | Shape with field matching pattern `p`        |
+      420 +| `some(x)`                | Option containing a value                    |
+      421 +| `none`                   | Empty option                                 |
+      422 +| `ok(x)`                  | Successful result                            |
+      423 +| `err(e)`                 | Error result                                 |
+      424 +| `(a, b)`                 | Tuple of two elements                        |
+      425
+      426  ### 6.4 Guards
+      427
+      428 -    Patterns can have guards using `when`:
+      428 +Patterns can have guards using `when`:
+      429
+      430 -    ```
+      431 -    match value
+      432 -    case n when n > 0 => "positive"
+      433 -    case 0 => "zero"
+      434 -    case n => "negative: {n}"
+      435 -    end
+      436 -    ```
+      430 +```
+      431 +match value
+      432 +  case n when n > 0 => "positive"
+      433 +  case 0 => "zero"
+      434 +  case n => "negative: {n}"
+      435 +end
+      436 +```
+      437
+      438  ### 6.5 Exhaustiveness
+      439
+      440 -    The interpreter warns if a match expression is not exhaustive (does not cover all
+      441 -            possible values). A wildcard `_` or `else` branch ensures exhaustiveness.
+      440 +The interpreter warns if a match expression is not exhaustive (does not cover all
+      441 +possible values). A wildcard `_` or `else` branch ensures exhaustiveness.
+      442
+      443 -    ---
+      443 +---
+      444
+      445  ## 7. Pipelines
+      446
+      447  ### 7.1 Standard Pipeline `|>`
+      448
+      449 -    The pipeline operator passes the left-hand value as the **first** argument to the
+      450 -    right-hand function:
+      449 +The pipeline operator passes the left-hand value as the **first** argument to the
+      450 +right-hand function:
+      451
+      452 -    ```
+      453 -    "hello world"
+      454 -    |> split(" ")          -- ["hello", "world"]
+      455 -    |> map(w => w |> upper_first)  -- ["Hello", "World"]
+      456 -    |> join(" ")           -- "Hello World"
+      457 -    ```
+      452 +```
+      453 +"hello world"
+      454 +|> split(" ")                    -- ["hello", "world"]
+      455 +|> map(w => w |> upper_first)    -- ["Hello", "World"]
+      456 +|> join(" ")                     -- "Hello World"
+      457 +```
+      458
+      459 -    Equivalent to: `join(map(split("hello world", " "), ...), " ")`
+      459 +Equivalent to: `join(map(split("hello world", " "), ...), " ")`
+      460
+      461  ### 7.2 Conditional Pipeline `|?>`
+      462
+      463 -    The conditional pipeline unwraps `ok`/`some` values and short-circuits on
+      464 -    `err`/`none`:
+      463 +The conditional pipeline unwraps `ok`/`some` values and short-circuits on
+      464 +`err`/`none`:
+      465
+      466 -    ```
+      467 -    fn load_config(path: Text) -> Result[Config, Text] do
+      468 -    read_file(path)              -- Result[Text, Text]
+      469 -    |?> parse_json             -- only called on ok
+      470 -    |?> validate_config        -- only called on ok
+      471 -    |?> apply_defaults         -- only called on ok
+      472 -    end
+      473 -    ```
+      466 +```
+      467 +fn load_config(path: Text) -> Result[Config, Text] do
+      468 +  read_file(path)              -- Result[Text, Text]
+      469 +  |?> parse_json               -- only called on ok
+      470 +  |?> validate_config          -- only called on ok
+      471 +  |?> apply_defaults           -- only called on ok
+      472 +end
+      473 +```
+      474
+      475 -    If any step returns `err(e)`, the entire pipeline evaluates to `err(e)`. If any step
+      476 -    returns `none`, the pipeline evaluates to `none`.
+      475 +If any step returns `err(e)`, the entire pipeline evaluates to `err(e)`. If any step
+      476 +returns `none`, the pipeline evaluates to `none`.
+      477
+      478 -    Rules:
+      479 -    - If the input is `ok(v)`, `v` is extracted and passed to the next function.
+      480 -    - If the input is `err(e)`, the pipeline short-circuits and returns `err(e)`.
+      481 -    - If the input is `some(v)`, `v` is extracted and passed to the next function.
+      482 -    - If the input is `none`, the pipeline short-circuits and returns `none`.
+      483 -    - If the next function returns an unwrapped value (not Result/Option), it is
+      484 -    automatically wrapped in `ok()`/`some()` to continue the pipeline.
+      478 +Rules:
+      479
+      480 +- If the input is `ok(v)`, `v` is extracted and passed to the next function.
+      481 +- If the input is `err(e)`, the pipeline short-circuits and returns `err(e)`.
+      482 +- If the input is `some(v)`, `v` is extracted and passed to the next function.
+      483 +- If the input is `none`, the pipeline short-circuits and returns `none`.
+      484 +- If the next function returns an unwrapped value (not Result/Option), it is
+      485 +  automatically wrapped in `ok()`/`some()` to continue the pipeline.
+      486 +
+      487  ### 7.3 Tap
+      488
+      488 -    The built-in `tap` function executes a side effect without altering the pipeline value:
+      489 +The built-in `tap` function executes a side effect without altering the pipeline
+      490 +value:
+      491
+      490 -    ```
+      491 -    data
+      492 -    |> tap(d => print("loaded: {d |> length} items"))
+      493 -    |> transform
+      494 -    |> tap(d => print("transformed"))
+      495 -    |> output
+      496 -    ```
+      492 +```
+      493 +data
+      494 +|> tap(d => print("loaded: {d |> length} items"))
+      495 +|> transform
+      496 +|> tap(d => print("transformed"))
+      497 +|> output
+      498 +```
+      499
+      498 -    `tap(value, fn)` calls `fn(value)` for its side effect and returns `value` unchanged.
+      500 +`tap(value, fn)` calls `fn(value)` for its side effect and returns `value` unchanged.
+      501
+      502  ### 7.4 Inspect
+      503
+      502 -    The built-in `inspect` function prints a debug representation of the value and returns
+      503 -    it unchanged:
+      504 +The built-in `inspect` function prints a debug representation of the value and
+      505 +returns it unchanged:
+      506
+      505 -    ```
+      506 -    data |> inspect |> transform |> inspect |> output
+      507 -    -- Prints: [inspect] <value representation>
+      508 -    -- at each inspect point
+      509 -    ```
+      507 +```
+      508 +data |> inspect |> transform |> inspect |> output
+      509 +-- Prints: [inspect] <value representation>
+      510 +-- at each inspect point
+      511 +```
+      512
+      511 -    `inspect` can take an optional label: `inspect("after transform")`.
+      513 +`inspect` can take an optional label: `inspect("after transform")`.
+      514
+      513 -    ---
+      515 +---
+      516
+      517  ## 8. Shapes
+      518
+      517 -    Shapes are named, structural record types.
+      519 +Shapes are named, structural record types.
+      520
+      521  ### 8.1 Definition
+      522
+      521 -    ```
+      522 -    shape Person {
+      523 -name: Text,
+      524 -          age: Num,
+      525 -          email: Option[Text]
+      526 -    }
+      523  ```
+      524 +shape Person {
+      525 +  name: Text,
+      526 +  age: Num,
+      527 +  email: Option[Text]
+      528 +}
+      529 +```
+      530
+      531  ### 8.2 Construction
+      532
+      533  ```
+      534  let alice = Person {
+      533 -name: "Alice",
+      534 -          age: 30,
+      535 -          email: some("alice@example.com")
+      535 +  name: "Alice",
+      536 +  age: 30,
+      537 +  email: some("alice@example.com")
+      538  }
+      539  ```
+      540
+     ...
+       551
+       552  Since shapes are immutable, `with` creates a copy with updated fields:
+       553
+       552 -    ```
+       553 -    let older_alice = alice |> with(age: 31)
+       554 -    -- older_alice.age is 31, all other fields unchanged
+       555 -    ```
+       554 +```
+       555 +let older_alice = alice |> with(age: 31)
+       556 +-- older_alice.age is 31, all other fields unchanged
+       557 +```
+       558
+       557 -    Multiple fields can be updated:
+       559 +Multiple fields can be updated:
+       560
+       559 -    ```
+       560 -    let updated = alice |> with(age: 31, email: none)
+       561 -    ```
+       561 +```
+       562 +let updated = alice |> with(age: 31, email: none)
+       563 +```
+       564
+       563 -    `with` is special syntax, not a regular function. Its arguments use
+       564 -    `field_name: value` syntax (like shape construction) rather than positional
+       565 -    arguments. It can be used in pipelines or called directly:
+       566 -    `with(alice, age: 31)`.
+       565 +`with` is special syntax, not a regular function. Its arguments use `field_name:
+       566 +value` syntax (like shape construction) rather than positional arguments. It can be
+       567 +used in pipelines or called directly: `with(alice, age: 31)`.
+       568
+       569  ### 8.5 Shape Methods
+       570
+       570 -    Functions can be associated with a shape by defining them inside a module of the same
+       571 -    name:
+       571 +Functions can be associated with a shape by defining them inside a module of the
+       572 +same name:
+       573
+       573 -    ```
+       574 -    shape Circle {
+       575 -center: Point,
+       576 -            radius: Num
+       577 -    }
+       574 +```
+       575 +shape Circle {
+       576 +  center: Point,
+       577 +  radius: Num
+       578 +}
+       579
+       580  module Circle do
+       580 -fn area(c: Circle) -> Num do
+       581 -3.14159 * c.radius * c.radius
+       581 +  fn area(c: Circle) -> Num do
+       582 +    3.14159 * c.radius * c.radius
+       583 +  end
+       584 +
+       585 +  fn scale(c: Circle, factor: Num) -> Circle do
+       586 +    c |> with(radius: c.radius * factor)
+       587 +  end
+       588  end
+       589
+       584 -    fn scale(c: Circle, factor: Num) -> Circle do
+       585 -c |> with(radius: c.radius * factor)
+       586 -    end
+       587 -    end
+       590 +-- Usage:
+       591 +let c = Circle { center: Point { x: 0, y: 0 }, radius: 5 }
+       592 +c |> Circle.area       -- 78.53975
+       593 +c |> Circle.scale(2)   -- Circle with radius 10
+       594 +```
+       595
+       589 -    -- Usage:
+       590 -    let c = Circle { center: Point { x: 0, y: 0 }, radius: 5 }
+       591 -    c |> Circle.area       -- 78.53975
+       592 -    c |> Circle.scale(2)   -- Circle with radius 10
+       593 -    ```
+       596 +---
+       597
+       595 -    ---
+       596 -
+       598  ## 9. Bijections
+       599
+       599 -    A bijection defines a bidirectional transformation — a function and its inverse,
+       600 -    declared together to ensure consistency.
+       600 +A bijection defines a bidirectional transformation — a function and its inverse,
+       601 +declared together to ensure consistency.
+       602
+       603  ### 9.1 Definition
+       604
+       604 -    ```
+       605 +```
+       606  biject celsius_fahrenheit(c: Num) <-> (f: Num)
+       606 -    forward do
+       607 +  forward do
+       608      c * 9 / 5 + 32
+       608 -    end
+       609 -    reverse do
+       609 +  end
+       610 +  reverse do
+       611      (f - 32) * 5 / 9
+       611 -    end
+       612 -    end
+       613 -    ```
+       612 +  end
+       613 +end
+       614 +```
+       615
+       616  ### 9.2 Usage
+       617
+       617 -    ```
+       618 -    100 |> celsius_fahrenheit            -- 212.0
+       619 -    212 |> celsius_fahrenheit.rev        -- 100.0
+       620 -    ```
+       618 +```
+       619 +100 |> celsius_fahrenheit            -- 212.0
+       620 +212 |> celsius_fahrenheit.rev        -- 100.0
+       621 +```
+       622
+       622 -    - `celsius_fahrenheit` calls the forward direction.
+       623 -    - `celsius_fahrenheit.rev` calls the reverse direction.
+       623 +- `celsius_fahrenheit` calls the forward direction.
+       624 +- `celsius_fahrenheit.rev` calls the reverse direction.
+       625
+       626  ### 9.3 Composition
+       627
+       627 -    Bijections can be composed to create new bijections:
+       628 +Bijections can be composed to create new bijections:
+       629
+       629 -    ```
+       630 +```
+       631  biject double(x: Num) <-> (y: Num)
+       631 -    forward do x * 2 end
+       632 -    reverse do y / 2 end
+       633 -    end
+       632 +  forward do x * 2 end
+       633 +  reverse do y / 2 end
+       634 +end
+       635
+       636  biject add_one(x: Num) <-> (y: Num)
+       636 -    forward do x + 1 end
+       637 -    reverse do y - 1 end
+       638 -    end
+       637 +  forward do x + 1 end
+       638 +  reverse do y - 1 end
+       639 +end
+       640
+       640 -    let double_then_add = double >> add_one   -- composed bijection
+       641 -    5 |> double_then_add        -- 11
+       642 -    11 |> double_then_add.rev   -- 5
+       643 -    ```
+       641 +let double_then_add = double >> add_one   -- composed bijection
+       642 +5 |> double_then_add        -- 11
+       643 +11 |> double_then_add.rev   -- 5
+       644 +```
+       645
+       645 -    The `>>` operator composes bijections: `(a >> b).forward = b.forward(a.forward(x))`
+       646 -    and `(a >> b).rev = a.rev(b.rev(x))`.
+       646 +The `>>` operator composes bijections: `(a >> b).forward = b.forward(a.forward(x))`
+       647 +and `(a >> b).rev = a.rev(b.rev(x))`.
+       648
+       649  ### 9.4 Proof of Bijectivity
+       650
+       650 -    The interpreter can optionally verify that forward and reverse are inverses by running
+       651 -    round-trip checks on proof values:
+       651 +The interpreter can optionally verify that forward and reverse are inverses by
+       652 +running round-trip checks on proof values:
+       653
+       653 -    ```
+       654 +```
+       655  biject celsius_fahrenheit(c: Num) <-> (f: Num)
+       655 -    forward do c * 9 / 5 + 32 end
+       656 -    reverse do (f - 32) * 5 / 9 end
+       657 -    end
+       656 +  forward do c * 9 / 5 + 32 end
+       657 +  reverse do (f - 32) * 5 / 9 end
+       658 +end
+       659
+       659 -    proof "celsius_fahrenheit round-trip" do
+       660 -    [0, 100, -40, 37] |> each(c =>
+       661 -            assert c |> celsius_fahrenheit |> celsius_fahrenheit.rev == c
+       662 -            )
+       663 -    end
+       664 -    ```
+       660 +proof "celsius_fahrenheit round-trip" do
+       661 +  [0, 100, -40, 37] |> each(c =>
+       662 +    assert c |> celsius_fahrenheit |> celsius_fahrenheit.rev == c
+       663 +  )
+       664 +end
+       665 +```
+       666
+       666 -    ---
+       667 +---
+       668
+       669  ## 10. Proofs & Contracts
+       670
+       671  ### 10.1 Proof Blocks
+       672
+       672 -    Proof blocks are inline test assertions. They execute as part of the program and abort
+       673 -    on failure. They can be disabled in production with an interpreter flag (`--no-proofs`).
+       673 +Proof blocks are inline test assertions. They execute as part of the program and
+       674 +abort on failure. They can be disabled in production with an interpreter flag
+       675 +(`--no-proofs`).
+       676
+       675 -    ```
+       676 -    proof "list operations" do
+       677 -    let xs = [3, 1, 4, 1, 5]
+       678 -    assert xs |> length == 5
+       679 -    assert xs |> sort == [1, 1, 3, 4, 5]
+       680 -    assert xs |> filter(x => x > 2) == [3, 4, 5]
+       681 -    end
+       682 -    ```
+       677 +```
+       678 +proof "list operations" do
+       679 +  let xs = [3, 1, 4, 1, 5]
+       680 +  assert xs |> length == 5
+       681 +  assert xs |> sort == [1, 1, 3, 4, 5]
+       682 +  assert xs |> filter(x => x > 2) == [3, 4, 5]
+       683 +end
+       684 +```
+       685
+       684 -    A proof block has:
+       686 +A proof block has:
+       687 +
+       688  - A descriptive string name (required)
+       686 -    - A `do...end` body containing `assert` statements
+       687 -    - No parameters and no return value
+       689 +- A `do...end` body containing `assert` statements
+       690 +- No parameters and no return value
+       691
+       692  ### 10.2 Assert
+       693
+       691 -    `assert` takes a boolean expression. On failure, it reports:
+       692 -    - The proof block name
+       693 -    - The failed expression as source text
+       694 -    - The actual values of sub-expressions
+       694 +`assert` takes a boolean expression. On failure, it reports:
+       695
+       696 -    ```
+       697 -    assert 2 + 2 == 5
+       698 -    -- Error: Assertion failed in proof "math"
+       699 -    --   assert 2 + 2 == 5
+       700 -    --   Left:  4
+       701 -    --   Right: 5
+       702 -    ```
+       696 +- The proof block name
+       697 +- The failed expression as source text
+       698 +- The actual values of sub-expressions
+       699
+       700 +```
+       701 +assert 2 + 2 == 5
+       702 +-- Error: Assertion failed in proof "math"
+       703 +--   assert 2 + 2 == 5
+       704 +--   Left:  4
+       705 +--   Right: 5
+       706 +```
+       707 +
+       708  ### 10.3 Contracts (Require / Ensure)
+       709
+       706 -    See Section 5.1. Contracts are checked at runtime by default. They can be disabled
+       707 -    with `--no-contracts`.
+       710 +See Section 5.1. Contracts are checked at runtime by default. They can be disabled
+       711 +with `--no-contracts`.
+       712
+       709 -    ---
+       713 +---
+       714
+       715  ## 11. Streams & Iteration
+       716
+       713 -    NovelScript has **no loop constructs** (`for`, `while`, `loop`). All iteration is
+       714 -    accomplished through streams, pipelines, and recursion.
+       717 +NovelScript has **no loop constructs** (`for`, `while`, `loop`). All iteration is
+       718 +accomplished through streams, pipelines, and recursion.
+       719
+       716 -    Stream operations such as `map`, `filter`, `take`, `each`, `reduce`, `join`,
+       717 -    and others work on both lists and streams. When called on a list, the list is
+       718 -    implicitly converted to a stream. Terminal operations that produce a collection
+       719 -    (like `collect`) return a `List`.
+       720 +Stream operations such as `map`, `filter`, `take`, `each`, `reduce`, `join`, and
+       721 +others work on both lists and streams. When called on a list, the list is implicitly
+       722 +converted to a stream. Terminal operations that produce a collection (like `collect`)
+       723 +return a `List`.
+       724
+       725  ### 11.1 Creating Streams
+       726
+       723 -    ```
+       724 -    -- From a range
+       725 -    1 to 10                              -- stream of 1..10 inclusive
+       726 -    1 until 10                           -- stream of 1..9
+       727 +```
+       728 +-- From a range
+       729 +1 to 10                              -- stream of 1..10 inclusive
+       730 +1 until 10                           -- stream of 1..9
+       731
+       728 -    -- From a generator function
+       732 +-- From a generator function
+       733  stream(0, n => n + 2)                -- 0, 2, 4, 6, ... (infinite)
+       734
+       731 -    -- From a list
+       732 -    [1, 2, 3] |> to_stream               -- finite stream
+       733 -    ```
+       735 +-- From a list
+       736 +[1, 2, 3] |> to_stream               -- finite stream
+       737 +```
+       738
+       739  ### 11.2 Stream Operations
+       740
+       737 -    All operations are lazy until a terminal operation is reached:
+       741 +All operations are lazy until a terminal operation is reached:
+       742
+       739 -    ```
+       743 +```
+       744  -- Transformations (lazy)
+       741 -    stream |> map(fn)            -- transform each element
+       742 -    stream |> filter(fn)         -- keep matching elements
+       743 -    stream |> take(n)            -- first n elements
+       744 -    stream |> drop(n)            -- skip first n elements
+       745 -    stream |> take_while(fn)     -- take while predicate holds
+       746 -    stream |> drop_while(fn)     -- drop while predicate holds
+       747 -    stream |> zip(other)         -- pair elements from two streams
+       748 -    stream |> enumerate          -- pair each element with its index
+       749 -    stream |> flat_map(fn)       -- map then flatten
+       750 -    stream |> chunk(n)           -- group into chunks of n
+       751 -    stream |> append(value)      -- append an element to end of stream
+       745 +stream |> map(fn)            -- transform each element
+       746 +stream |> filter(fn)         -- keep matching elements
+       747 +stream |> take(n)            -- first n elements
+       748 +stream |> drop(n)            -- skip first n elements
+       749 +stream |> take_while(fn)     -- take while predicate holds
+       750 +stream |> drop_while(fn)     -- drop while predicate holds
+       751 +stream |> zip(other)         -- pair elements from two streams
+       752 +stream |> enumerate          -- pair each element with its index
+       753 +stream |> flat_map(fn)       -- map then flatten
+       754 +stream |> chunk(n)           -- group into chunks of n
+       755 +stream |> append(value)      -- append an element to end of stream
+       756
+       757  -- Terminal operations (force evaluation)
+       754 -    stream |> collect            -- collect into a List
+       755 -    stream |> reduce(init, fn)   -- fold into a single value
+       756 -    stream |> each(fn)           -- execute side effect for each element
+       757 -    stream |> count              -- count elements
+       758 -    stream |> any(fn)            -- true if any element matches
+       759 -    stream |> all(fn)            -- true if all elements match
+       758 +stream |> collect            -- collect into a List
+       759 +stream |> reduce(init, fn)   -- fold into a single value
+       760 +stream |> each(fn)           -- execute side effect for each element
+       761 +stream |> count              -- count elements
+       762 +stream |> any(fn)            -- true if any element matches
+       763 +stream |> all(fn)            -- true if all elements match
+       764  stream |> find(fn)           -- first matching element (Option)
+       761 -    stream |> sum                -- sum of numeric stream
+       762 -    stream |> join(sep)          -- join text stream with separator
+       763 -    ```
+       765 +stream |> sum                -- sum of numeric stream
+       766 +stream |> join(sep)          -- join text stream with separator
+       767 +```
+       768
+       769  ### 11.3 Examples
+       770
+       767 -    ```
+       768 -    -- Sum of squares of even numbers from 1 to 100
+       769 -    1 to 100
+       770 -    |> filter(n => n % 2 == 0)
+       771 +```
+       772 +-- Sum of squares of even numbers from 1 to 100
+       773 +1 to 100
+       774 +|> filter(n => n % 2 == 0)
+       775  |> map(n => n * n)
+       772 -    |> sum
+       773 -    -- 171700
+       776 +|> sum
+       777 +-- 171700
+       778
+       775 -    -- Fibonacci sequence
+       776 -    let fibs = stream((0, 1), (a, b) => (b, a + b))
+       777 -|> map((a, _) => a)
+       778 -    fibs |> take(10) |> collect
+       779 -    -- [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+       779 +-- Fibonacci sequence
+       780 +let fibs = stream((0, 1), (a, b) => (b, a + b))
+       781 +  |> map((a, _) => a)
+       782 +fibs |> take(10) |> collect
+       783 +-- [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+       784
+       781 -    -- FizzBuzz
+       782 -    1 to 100 |> each(n =>
+       783 -            match
+       784 -            case n % 15 == 0 => print("FizzBuzz")
+       785 -            case n % 3 == 0  => print("Fizz")
+       786 -            case n % 5 == 0  => print("Buzz")
+       787 -            else              => print(n |> to_text)
+       788 -            end
+       789 -            )
+       790 -    ```
+       785 +-- FizzBuzz
+       786 +1 to 100 |> each(n =>
+       787 +  match
+       788 +    case n % 15 == 0 => print("FizzBuzz")
+       789 +    case n % 3 == 0  => print("Fizz")
+       790 +    case n % 5 == 0  => print("Buzz")
+       791 +    else              => print(n |> to_text)
+       792 +  end
+       793 +)
+       794 +```
+       795
+       792 -    ---
+       796 +---
+       797
+       798  ## 12. Standard Library
+       799
+       800  ### 12.1 IO
+       801
+       798 -    ```
+       799 -    print(value)                         -- print to stdout with newline
+       800 -    print_inline(value)                  -- print without newline
+       801 -    read_line() -> Text                  -- read a line from stdin
+       802 -    read_file(path: Text) -> Result[Text, Text]      -- read entire file
+       803 -    write_file(path: Text, content: Text) -> Result[Void, Text]
+       804 -    append_file(path: Text, content: Text) -> Result[Void, Text]
+       805 -    ```
+       802 +```
+       803 +print(value)                                       -- print to stdout with newline
+       804 +print_inline(value)                                -- print without newline
+       805 +read_line() -> Text                                -- read a line from stdin
+       806 +read_file(path: Text) -> Result[Text, Text]        -- read entire file
+       807 +write_file(path: Text, content: Text) -> Result[Void, Text]
+       808 +append_file(path: Text, content: Text) -> Result[Void, Text]
+       809 +```
+       810
+       811  ### 12.2 Math
+       812
+       809 -    ```
+       810 -    abs(n: Num) -> Num
+       811 -    sqrt(n: Num) -> Num
+       812 -    pow(base: Num, exp: Num) -> Num
+       813 -    min(a: Num, b: Num) -> Num
+       814 -    max(a: Num, b: Num) -> Num
+       815 -    floor(n: Num) -> Num
+       816 -    ceil(n: Num) -> Num
+       817 -    round(n: Num) -> Num
+       818 -    ```
+       813 +```
+       814 +abs(n: Num) -> Num
+       815 +sqrt(n: Num) -> Num
+       816 +pow(base: Num, exp: Num) -> Num
+       817 +min(a: Num, b: Num) -> Num
+       818 +max(a: Num, b: Num) -> Num
+       819 +floor(n: Num) -> Num
+       820 +ceil(n: Num) -> Num
+       821 +round(n: Num) -> Num
+       822 +```
+       823
+       824  ### 12.3 Text
+       825
+       822 -    ```
+       823 -    length(t: Text) -> Num              -- also works on List
+       824 -    upper(t: Text) -> Text
+       825 -    lower(t: Text) -> Text
+       826 -    upper_first(t: Text) -> Text        -- capitalize first character
+       827 -    trim(t: Text) -> Text
+       828 -    split(t: Text, sep: Text) -> List[Text]
+       829 -    contains(t: Text, sub: Text) -> Bool
+       830 -    replace(t: Text, old: Text, new: Text) -> Text
+       831 -    starts_with(t: Text, prefix: Text) -> Bool
+       832 -    ends_with(t: Text, suffix: Text) -> Bool
+       833 -    chars(t: Text) -> List[Text]        -- split into individual characters
+       834 -    ```
+       826 +```
+       827 +length(t: Text) -> Num               -- also works on List
+       828 +upper(t: Text) -> Text
+       829 +lower(t: Text) -> Text
+       830 +upper_first(t: Text) -> Text         -- capitalize first character
+       831 +trim(t: Text) -> Text
+       832 +split(t: Text, sep: Text) -> List[Text]
+       833 +contains(t: Text, sub: Text) -> Bool
+       834 +replace(t: Text, old: Text, new: Text) -> Text
+       835 +starts_with(t: Text, prefix: Text) -> Bool
+       836 +ends_with(t: Text, suffix: Text) -> Bool
+       837 +chars(t: Text) -> List[Text]         -- split into individual characters
+       838 +```
+       839
+       840  ### 12.4 List
+       841
+       838 -    ```
+       839 -    length(l: List[T]) -> Num
+       840 -    get(l: List[T], index: Num) -> Option[T]
+       841 -    append(l: List[T], item: T) -> List[T]
+       842 -    prepend(l: List[T], item: T) -> List[T]
+       843 -    concat(a: List[T], b: List[T]) -> List[T]
+       844 -    reverse(l: List[T]) -> List[T]
+       845 -    sort(l: List[T]) -> List[T]
+       846 -    sort_by(l: List[T], key_fn: (T) -> Num) -> List[T]
+       847 -    unique(l: List[T]) -> List[T]
+       848 -    flatten(l: List[List[T]]) -> List[T]
+       849 -    ```
+       842 +```
+       843 +length(l: List[T]) -> Num
+       844 +get(l: List[T], index: Num) -> Option[T]
+       845 +append(l: List[T], item: T) -> List[T]
+       846 +prepend(l: List[T], item: T) -> List[T]
+       847 +concat(a: List[T], b: List[T]) -> List[T]
+       848 +reverse(l: List[T]) -> List[T]
+       849 +sort(l: List[T]) -> List[T]
+       850 +sort_by(l: List[T], key_fn: (T) -> Num) -> List[T]
+       851 +unique(l: List[T]) -> List[T]
+       852 +flatten(l: List[List[T]]) -> List[T]
+       853 +```
+       854
+       855  ### 12.5 Map
+       856
+       853 -    ```
+       854 -    get(m: Map[K, V], key: K) -> Option[V]
+       855 -    put(m: Map[K, V], key: K, value: V) -> Map[K, V]
+       856 -    remove(m: Map[K, V], key: K) -> Map[K, V]
+       857 -    keys(m: Map[K, V]) -> List[K]
+       858 -    values(m: Map[K, V]) -> List[V]
+       859 -    entries(m: Map[K, V]) -> List[(K, V)]
+       860 -    has_key(m: Map[K, V], key: K) -> Bool
+       861 -    merge(a: Map[K, V], b: Map[K, V]) -> Map[K, V]
+       862 -    ```
+       857 +```
+       858 +get(m: Map[K, V], key: K) -> Option[V]
+       859 +put(m: Map[K, V], key: K, value: V) -> Map[K, V]
+       860 +remove(m: Map[K, V], key: K) -> Map[K, V]
+       861 +keys(m: Map[K, V]) -> List[K]
+       862 +values(m: Map[K, V]) -> List[V]
+       863 +entries(m: Map[K, V]) -> List[(K, V)]
+       864 +has_key(m: Map[K, V], key: K) -> Bool
+       865 +merge(a: Map[K, V], b: Map[K, V]) -> Map[K, V]
+       866 +```
+       867
+       868  ### 12.6 Option & Result
+       869
+       866 -    ```
+       867 -    unwrap(o: Option[T]) -> T                    -- panics on none
+       868 -    unwrap(r: Result[T, E]) -> T                 -- panics on err
+       869 -    unwrap_or(o: Option[T], default: T) -> T     -- returns default on none
+       870 -    unwrap_or(r: Result[T, E], default: T) -> T  -- returns default on err
+       871 -    unwrap_or_else(o: Option[T], fn: () -> T) -> T
+       872 -    unwrap_or_else(r: Result[T, E], fn: () -> T) -> T
+       873 -    ```
+       870 +```
+       871 +unwrap(o: Option[T]) -> T                      -- panics on none
+       872 +unwrap(r: Result[T, E]) -> T                   -- panics on err
+       873 +unwrap_or(o: Option[T], default: T) -> T       -- returns default on none
+       874 +unwrap_or(r: Result[T, E], default: T) -> T    -- returns default on err
+       875 +unwrap_or_else(o: Option[T], fn: () -> T) -> T
+       876 +unwrap_or_else(r: Result[T, E], fn: () -> T) -> T
+       877 +```
+       878
+       879  ### 12.7 Convert
+       880
+       877 -    ```
+       878 -    to_text(value) -> Text
+       879 -    to_num(t: Text) -> Result[Num, Text]
+       880 -    to_stream(l: List[T]) -> Stream[T]
+       881 -    ```
+       881 +```
+       882 +to_text(value) -> Text
+       883 +to_num(t: Text) -> Result[Num, Text]
+       884 +to_stream(l: List[T]) -> Stream[T]
+       885 +```
+       886
+       887  ### 12.8 Functional
+       888
+       885 -    ```
+       886 -    identity(x: T) -> T                  -- returns its argument
+       887 -    compose(f, g) -> fn                   -- compose: compose(f, g)(x) = f(g(x))
+       888 -    tap(value: T, fn: (T) -> Void) -> T  -- side effect, returns value unchanged
+       889 -    inspect(value: T) -> T               -- debug print, returns value
+       890 -    inspect(label: Text, value: T) -> T  -- debug print with label
+       891 -    stream(init: T, fn: (T) -> T) -> Stream[T]  -- infinite stream from seed + step
+       892 -    collect(s: Stream[T]) -> List[T]     -- materialize stream into list
+       893 -    ```
+       889 +```
+       890 +identity(x: T) -> T                           -- returns its argument
+       891 +compose(f, g) -> fn                            -- compose: compose(f, g)(x) = f(g(x))
+       892 +tap(value: T, fn: (T) -> Void) -> T           -- side effect, returns value unchanged
+       893 +inspect(value: T) -> T                         -- debug print, returns value
+       894 +inspect(label: Text, value: T) -> T           -- debug print with label
+       895 +stream(init: T, fn: (T) -> T) -> Stream[T]    -- infinite stream from seed + step
+       896 +collect(s: Stream[T]) -> List[T]              -- materialize stream into list
+       897 +```
+       898
+       895 -    ---
+       899 +---
+       900
+       901  ## 13. Program Structure
+       902
+       903  ### 13.1 File Extension
+       904
+       901 -    NovelScript source files use the `.ns` extension.
+       905 +NovelScript source files use the `.ns` extension.
+       906
+       907  ### 13.2 Entry Point
+       908
+       905 -    A NovelScript program consists of one or more `.ns` files. Execution begins at the top
+       906 -    of the main file and proceeds top-to-bottom. Declarations (functions, shapes, modules,
+       907 -            bijections) are hoisted — they can be used before they are textually defined.
+       909 +A NovelScript program consists of one or more `.ns` files. Execution begins at the
+       910 +top of the main file and proceeds top-to-bottom. Declarations (functions, shapes,
+       911 +modules, bijections) are hoisted — they can be used before they are textually
+       912 +defined.
+       913
+       909 -    If a `main` function is defined with signature `fn main(args: List[Text])`, it is
+       910 -    called with command-line arguments after top-level code executes.
+       914 +If a `main` function is defined with signature `fn main(args: List[Text])`, it is
+       915 +called with command-line arguments after top-level code executes.
+       916
+       917  ### 13.3 File Layout Convention
+       918
+       914 -    ```
+       915 -    -- Imports
+       916 -    use ModuleName
+       919 +```
+       920 +-- Imports
+       921 +use ModuleName
+       922
+       918 -    -- Shape definitions
+       919 -    shape MyShape { ... }
+       923 +-- Shape definitions
+       924 +shape MyShape { ... }
+       925
+       921 -    -- Function definitions
+       922 -    fn my_function(...) do ... end
+       926 +-- Function definitions
+       927 +fn my_function(...) do ... end
+       928
+       924 -    -- Bijections
+       925 -    biject my_conversion(...) <-> (...) ... end
+       929 +-- Bijections
+       930 +biject my_conversion(...) <-> (...) ... end
+       931
+       927 -    -- Proofs
+       928 -    proof "description" do ... end
+       932 +-- Proofs
+       933 +proof "description" do ... end
+       934
+       935  -- Top-level code (or main function)
+       931 -    fn main(args: List[Text]) do
+       932 -    -- entry point
+       933 -    end
+       934 -    ```
+       936 +fn main(args: List[Text]) do
+       937 +  -- entry point
+       938 +end
+       939 +```
+       940
+       941  ### 13.4 Multi-File Programs
+       942
+       938 -    Files can import each other using `use`:
+       943 +Files can import each other using `use`:
+       944
+       940 -    ```
+       941 -    -- In math_utils.ns
+       942 -    module MathUtils do
+       943 -    fn square(n: Num) -> Num do n * n end
+       944 -    end
+       945 +```
+       946 +-- In math_utils.ns
+       947 +module MathUtils do
+       948 +  fn square(n: Num) -> Num do n * n end
+       949 +end
+       950
+       946 -    -- In main.ns
+       947 -    use MathUtils
+       951 +-- In main.ns
+       952 +use MathUtils
+       953
+       949 -    MathUtils.square(5) |> print   -- 25
+       950 -    ```
+       954 +MathUtils.square(5) |> print   -- 25
+       955 +```
+       956
+       952 -    The interpreter resolves imports relative to the main file's directory.
+       957 +The interpreter resolves imports relative to the main file's directory.
+       958
+       954 -    ---
+       959 +---
+       960
+       961  ## 14. Annotations
+       962
+       958 -    Annotations provide metadata that does not affect runtime behavior (unless the
+       959 -            interpreter uses them for diagnostics).
+       963 +Annotations provide metadata that does not affect runtime behavior (unless the
+       964 +interpreter uses them for diagnostics).
+       965
+       961 -    ```
+       962 -    @intent "Brief natural-language description of purpose"
+       963 -    @deprecated "Use new_function instead"
+       964 -    @todo "Handle edge case for empty lists"
+       965 -    ```
+       966 +```
+       967 +@intent "Brief natural-language description of purpose"
+       968 +@deprecated "Use new_function instead"
+       969 +@todo "Handle edge case for empty lists"
+       970 +```
+       971
+       967 -    Annotations attach to the next declaration (function, shape, module, bijection).
+       972 +Annotations attach to the next declaration (function, shape, module, bijection).
+       973
+       969 -    ---
+       974 +---
+       975
+       976  ## 15. Formal Grammar (Simplified)
+       977
+       973 -    ```
+       974 -    program          ::= declaration*
+       975 -    declaration      ::= fn_decl | shape_decl | module_decl | use_decl
+       976 -                       | biject_decl | proof_decl | type_decl | expression
+       978 +```
+       979 +program          ::= declaration*
+       980 +declaration      ::= fn_decl | shape_decl | module_decl | use_decl
+       981 +                   | biject_decl | proof_decl | type_decl | expression
+       982
+       978 -    fn_decl          ::= annotation* 'fn' IDENT type_params? '(' params ')'
+       979 -                         ('->' type)? contract* 'do' block 'end'
+       980 -    contract         ::= 'require' expression | 'ensure' expression
+       981 -    params           ::= (param (',' param)*)?
+       982 -    param            ::= IDENT (':' type)?
+       983 -    type_params      ::= '[' IDENT (',' IDENT)* ']'
+       983 +fn_decl          ::= annotation* 'fn' IDENT type_params? '(' params ')'
+       984 +                     ('->' type)? contract* 'do' block 'end'
+       985 +contract         ::= 'require' expression | 'ensure' expression
+       986 +params           ::= (param (',' param)*)?
+       987 +param            ::= IDENT (':' type)?
+       988 +type_params      ::= '[' IDENT (',' IDENT)* ']'
+       989
+       985 -    shape_decl       ::= 'shape' IDENT type_params? '{' field (',' field)* '}'
+       986 -    field            ::= IDENT ':' type
+       990 +shape_decl       ::= 'shape' IDENT type_params? '{' field (',' field)* '}'
+       991 +field            ::= IDENT ':' type
+       992
+       988 -    module_decl      ::= 'module' IDENT 'do' declaration* 'end'
+       993 +module_decl      ::= 'module' IDENT 'do' declaration* 'end'
+       994
+       990 -    use_decl         ::= 'use' module_path ('as' IDENT)?
+       991 -                       | 'use' module_path '.{' IDENT (',' IDENT)* '}'
+       992 -    module_path      ::= IDENT ('.' IDENT)*
+       995 +use_decl         ::= 'use' module_path ('as' IDENT)?
+       996 +                   | 'use' module_path '.{' IDENT (',' IDENT)* '}'
+       997 +module_path      ::= IDENT ('.' IDENT)*
+       998
+       994 -    biject_decl      ::= 'biject' IDENT '(' param ')' '<->' '(' param ')'
+       995 -                         'forward' 'do' block 'end'
+       996 -                         'reverse' 'do' block 'end'
+       997 -                         'end'
+       999 +biject_decl      ::= 'biject' IDENT '(' param ')' '<->' '(' param ')'
+      1000 +                     'forward' 'do' block 'end'
+      1001 +                     'reverse' 'do' block 'end'
+      1002 +                     'end'
+      1003
+       999 -    proof_decl       ::= 'proof' STRING 'do' block 'end'
+      1004 +proof_decl       ::= 'proof' STRING 'do' block 'end'
+      1005
+      1001 -    type_decl        ::= 'type' IDENT type_params? '=' type
+      1006 +type_decl        ::= 'type' IDENT type_params? '=' type
+      1007
+      1003 -    expression       ::= pipeline
+      1004 -    pipeline         ::= conditional (('|>' | '|?>') pipe_target)*
+      1005 -    pipe_target      ::= dotted_name call_args?
+      1006 -                       | dotted_name trailing_block
+      1007 -    dotted_name      ::= IDENT ('.' IDENT)*
+      1008 -    conditional      ::= or_expr
+      1009 -    or_expr          ::= and_expr ('or' and_expr)*
+      1010 -    and_expr         ::= comparison ('and' comparison)*
+      1011 -    comparison       ::= range_expr (comp_op range_expr)?
+      1012 -    range_expr       ::= addition (('to' | 'until') addition)?
+      1013 -    addition         ::= multiplication (('+' | '-' | '++') multiplication)*
+      1014 -    multiplication   ::= unary (('*' | '/' | '//' | '%') unary)*
+      1015 -    unary            ::= ('-' | 'not') unary | postfix
+      1016 -    postfix          ::= primary ('.' IDENT | '[' expression ']' | call_args)*
+      1017 -    primary          ::= literal | IDENT | '(' expression ')' | block_expr
+      1018 -                       | match_expr | lambda | list | map | tuple
+      1008 +expression       ::= pipeline
+      1009 +pipeline         ::= conditional (('|>' | '|?>') pipe_target)*
+      1010 +pipe_target      ::= dotted_name call_args?
+      1011 +                   | dotted_name trailing_block
+      1012 +dotted_name      ::= IDENT ('.' IDENT)*
+      1013 +conditional      ::= or_expr
+      1014 +or_expr          ::= and_expr ('or' and_expr)*
+      1015 +and_expr         ::= comparison ('and' comparison)*
+      1016 +comparison       ::= range_expr (comp_op range_expr)?
+      1017 +range_expr       ::= addition (('to' | 'until') addition)?
+      1018 +addition         ::= multiplication (('+' | '-' | '++') multiplication)*
+      1019 +multiplication   ::= unary (('*' | '/' | '//' | '%') unary)*
+      1020 +unary            ::= ('-' | 'not') unary | postfix
+      1021 +postfix          ::= primary ('.' IDENT | '[' expression ']' | call_args)*
+      1022 +primary          ::= literal | IDENT | '(' expression ')' | block_expr
+      1023 +                   | match_expr | lambda | list | map | tuple
+      1024
+      1020 -    match_expr       ::= 'match' expression? case_clause+
+      1021 -                         ('else' '=>' expression)? 'end'
+      1022 -    case_clause      ::= 'case' pattern ('when' expression)? '=>' expression
+      1025 +match_expr       ::= 'match' expression? case_clause+
+      1026 +                     ('else' '=>' expression)? 'end'
+      1027 +case_clause      ::= 'case' pattern ('when' expression)? '=>' expression
+      1028
+      1024 -    pattern          ::= literal | IDENT | '_'
+      1025 -                       | list_pattern | map_pattern | shape_pattern
+      1026 -                       | option_pattern | result_pattern | tuple_pattern
+      1027 -    list_pattern     ::= '[' (pattern (',' pattern)* ('..' IDENT)?)? ']'
+      1028 -    map_pattern      ::= '#{' STRING ':' pattern (',' STRING ':' pattern)* '}'
+      1029 -    tuple_pattern    ::= '(' pattern ',' pattern (',' pattern)* ')'
+      1029 +pattern          ::= literal | IDENT | '_'
+      1030 +                   | list_pattern | map_pattern | shape_pattern
+      1031 +                   | option_pattern | result_pattern | tuple_pattern
+      1032 +list_pattern     ::= '[' (pattern (',' pattern)* ('..' IDENT)?)? ']'
+      1033 +map_pattern      ::= '#{' STRING ':' pattern (',' STRING ':' pattern)* '}'
+      1034 +tuple_pattern    ::= '(' pattern ',' pattern (',' pattern)* ')'
+      1035
+      1031 -    lambda           ::= param_list '=>' expression
+      1032 -                       | param_list '=>' 'do' block 'end'
+      1033 -    trailing_block   ::= 'do' '|' params '|' block 'end'
+      1034 -    param_list       ::= IDENT | '(' params ')' | '(' ')'
+      1036 +lambda           ::= param_list '=>' expression
+      1037 +                   | param_list '=>' 'do' block 'end'
+      1038 +trailing_block   ::= 'do' '|' params '|' block 'end'
+      1039 +param_list       ::= IDENT | '(' params ')' | '(' ')'
+      1040
+      1036 -    with_expr        ::= 'with' '(' with_arg (',' with_arg)* ')'
+      1037 -    with_arg         ::= IDENT ':' expression
+      1041 +with_expr        ::= 'with' '(' with_arg (',' with_arg)* ')'
+      1042 +with_arg         ::= IDENT ':' expression
+      1043
+      1039 -    tuple            ::= '(' expression ',' expression (',' expression)* ')'
+      1044 +tuple            ::= '(' expression ',' expression (',' expression)* ')'
+      1045
+      1041 -    block_expr       ::= 'do' block 'end'
+      1042 -    block            ::= statement*
+      1043 -    statement        ::= 'let' 'mut'? IDENT (':' type)? '=' expression
+      1044 -                       | IDENT '<-' expression
+      1045 -                       | 'assert' expression
+      1046 -                       | 'return' expression
+      1047 -                       | expression
+      1048 -    ```
+      1046 +block_expr       ::= 'do' block 'end'
+      1047 +block            ::= statement*
+      1048 +statement        ::= 'let' 'mut'? IDENT (':' type)? '=' expression
+      1049 +                   | IDENT '<-' expression
+      1050 +                   | 'assert' expression
+      1051 +                   | 'return' expression
+      1052 +                   | expression
+      1053 +```
+      1054
+      1050 -            ---
+      1055 +---
+      1056
+      1057  ## 16. Interpreter Flags
+      1058
+      1054 -            ```
+      1055 -            novelscript <file.ns>               -- run program
+      1056 -            novelscript <file.ns> --no-proofs   -- skip proof blocks
+      1057 -            novelscript <file.ns> --no-contracts -- skip require/ensure checks
+      1058 -            novelscript --version                -- print version
+      1059 -            novelscript --help                   -- print usage
+      1060 -            ```
+      1059 +```
+      1060 +novelscript <file.ns>                -- run program
+      1061 +novelscript <file.ns> --no-proofs    -- skip proof blocks
+      1062 +novelscript <file.ns> --no-contracts -- skip require/ensure checks
+      1063 +novelscript --version                -- print version
+      1064 +novelscript --help                   -- print usage
+      1065 +```
+      1066
+      1062 -            ---
+      1067 +---
+      1068
+      1069  ## Appendix A: Reserved for Future Versions
+      1070
+      1066 -            The following features are reserved for future specification:
+      1071 +The following features are reserved for future specification:
+      1072
+      1068 -            - **Concurrency** — async/await, channels, parallel pipelines
+      1069 -            - **Traits / Interfaces** — shared behavior across shapes
+      1070 -            - **Pattern-based dispatch** — multi-method functions
+      1071 -            - **Foreign Function Interface** — calling into host language
+      1072 -            - **Package management** — dependency resolution and versioning
+      1073 +- **Concurrency** — async/await, channels, parallel pipelines
+      1074 +- **Traits / Interfaces** — shared behavior across shapes
+      1075 +- **Pattern-based dispatch** — multi-method functions
+      1076 +- **Foreign Function Interface** — calling into host language
+      1077 +- **Package management** — dependency resolution and versioning
+
+⏺ Now let me fix the tutorial.
+
+⏺ The tutorial has fewer issues — mainly the Collatz append on stream, and the removed type Point3D anonymous shape
+  syntax that I should check for references. Let me also fix up some consistency issues and the abs function example.
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ That abs example is actually fine stylistically — it matches on a boolean. It's a valid pattern even if the
+  subjectless match form might be more idiomatic. Let me focus on the Collatz example and the overall consistency.
+
+⏺ Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ The Collatz example uses append on a stream, which is now documented in the spec. The pattern is a bit unusual but
+  works correctly — I'll leave it as is since append is now in the stream operations list.
+
+  Now let me check the tutorial has no remaining anonymous shape type reference and that formatting is clean throughout.
+
+⏺ Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Good — no references to the anonymous shape syntax in the tutorial. The tutorial formatting looks clean already
+  (consistent indentation using 2 spaces inside code blocks). Let me verify the whole file once more for any remaining
+  issues.
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ The tutorial looks good. Let me add a Tuple entry to the Quick Reference table since we added tuples to the spec.
+
+⏺ Update(docs/tutorial.md)
+  ⎿  Added 1 line
+      660  | Conditional          | `match case guard => e else => e end`          |
+      661  | Shape                | `shape S { field: Type }`                      |
+      662  | Shape update         | `s |> with(field: value)`                      |
+      663 +| Tuple                | `(1, "hello")`                                 |
+      664  | List                 | `[1, 2, 3]`                                   |
+      665  | Map                  | `#{"key": value}`                              |
+      666  | Range (inclusive)    | `1 to 10`                                      |
+
+⏺ Here's a summary of all changes made:
+
+  specification.md
+
+  Content fixes:
+  1. Completed truncated Principle 8 ("Explicit over implicit")
+  2. Added Tuple type to Section 3.2 (Composite Types) with description
+  3. Added tuple literal to Section 4.1 (Literals)
+  4. Added // (floor division) and >> (bijection composition) to operators table
+  5. Added // to precedence table at level 7 with *, /, %
+  6. Added to/until to precedence table at level 4
+  7. Added note about >> precedence
+  8. Clarified stream/collect as built-in functions, not keywords
+  9. Added Section 4.5 (Early Return) documenting return semantics
+  10. Added with as special syntax with explanation in Section 8.4
+  11. Added List/Stream interoperability paragraph to Section 11
+  12. Added append(value) to stream operations
+  13. Added Section 12.6 (Option & Result) with unwrap, unwrap_or, unwrap_or_else
+  14. Added upper_first, to_stream to standard library
+  15. Added stream() and collect() to Functional section
+  16. Removed anonymous shape type alias (type Point3D = { x: Num, y: Num, z: Num }) — undocumented syntax
+  17. Fixed formal grammar: pipeline RHS now supports dotted names (Circle.area), added trailing block lambda syntax,
+  map patterns, tuple patterns, with_expr, range_expr, and tuple productions
+
+  Formatting fixes:
+  - Rewrote entire file with consistent indentation (no stray leading spaces)
+  - All code blocks consistently use no indentation inside markdown
+  - All prose paragraphs at consistent margin
+  - Tables properly aligned
+
+  tutorial.md
+
+  - Added Tuple to Quick Reference table
+
+✻ Churned for 6m 0s
+
+❯ Please do another review.
+
+⏺ Read 2 files (ctrl+o to expand)
+
+⏺ Here's my second-pass review. The formatting is now clean throughout. These are content/correctness issues.
+
+  ---
+  Specification Issues
+
+  Grammar Gaps (Section 15)
+
+  1. with_expr is unreachable — It's defined (line 1041) but never referenced from any other production. It should be
+  reachable, likely as a pipe_target or primary alternative.
+  2. option_pattern, result_pattern, shape_pattern are referenced but never defined — The pattern production (line
+  1029-1031) uses these, but only list_pattern, map_pattern, and tuple_pattern have definitions. Need to add:
+  option_pattern   ::= 'some' '(' pattern ')' | 'none'
+  result_pattern   ::= 'ok' '(' pattern ')' | 'err' '(' pattern ')'
+  shape_pattern    ::= IDENT '{' IDENT ':' pattern (',' IDENT ':' pattern)* '}'
+  3. list, map, literal, call_args, annotation, comp_op, type all undefined — Referenced from productions but never
+  defined. Acceptable for a "simplified" grammar, but call_args especially matters since its shape (does it include
+  parens?) affects parsing. Worth defining at least the non-obvious ones.
+
+  Void / Unit Value Ambiguity
+
+  4. Void has "no literal" but () is used as a value — Section 3.1 says Void has no literal. But the early return
+  example (line 246) uses case false => () as an expression producing the unit/void value. The tuple grammar (line 1044)
+   requires at least 2 elements, and primary's '(' expression ')' requires an expression between parens — so () doesn't
+  parse as either. () needs to be defined as the Void literal, or the example needs changing.
+
+  Rest Pattern Without Binding
+
+  5. [top, ..] in tutorial (line 404) vs grammar — The tutorial's peek function uses [top, ..] (rest pattern with no
+  binding). But the grammar says list_pattern ::= '[' (pattern (',' pattern)* ('..' IDENT)?)? ']' — requiring an IDENT
+  after ... Either the grammar should allow '..' alone (without a binding), or the tutorial should use [top, ..rest] or
+  [top, .._].
+
+  Principle 2 Wording
+
+  6. "There is no else" vs else keyword — Principle 2 (line 15-16) says "There is no if, else, switch, or cond." But
+  else IS a keyword used in match expressions. This is technically saying there's no standalone if/else statement, but
+  the wording is confusing since else is actively used. Should say something like "no if/else statement" or "no if,
+  switch, or cond".
+
+  Tutorial Issues
+
+  7. No introduction of tuples — Tuples are now a formal type in the spec and appear in several tutorial examples (Stack
+   pop returns Result[(Num, Stack), Text], Fibonacci uses (0, 1), sort_by destructures tuples), but the tutorial never
+  introduces them. A brief mention in Section 2 (Values and Bindings) would help, since readers encounter them as early
+  as Section 7.
+
+  ---
+  Summary
+
+  The most important items:
+
+  - Void/() ambiguity (#4) — This is a real parsing contradiction. Either add () as the Void literal or change the
+  example.
+  - Undefined pattern productions (#2) — Easy to add, makes the grammar self-consistent.
+  - with_expr unreachable (#1) — Grammar defines it but nothing references it.
+  - Rest pattern mismatch (#5) — Grammar and tutorial disagree.
+  - else wording (#6) — Minor but potentially confusing.
+  - Tuples in tutorial (#7) — Pedagogical gap.
+
+  Everything else (formatting, operator tables, List/Stream relationship, stdlib completeness) looks good from the
+  previous round.
+
+✻ Crunched for 1m 15s
+
+❯ Please fix all issues.
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 2 lines, removed 2 lines
+      13  1. **Pipeline-first computation** — Data flows left-to-right through transformations.
+      14     Nested function calls are replaced by pipelines, eliminating precedence confusion.
+      15  2. **One way to branch** — Pattern matching is the sole branching mechanism. There is
+      16 -   no `if`, `else`, `switch`, or `cond`. This eliminates choice paralysis for code
+      17 -   generators and ensures exhaustive case handling.
+      16 +   no `if/else` statement, no `switch`, no `cond`. This eliminates choice paralysis
+      17 +   for code generators and ensures exhaustive case handling.
+      18  3. **Contracts are code** — Preconditions (`require`) and postconditions (`ensure`) are
+      19     part of function signatures, checked at runtime by default.
+      20  4. **Proofs live with code** — Inline test blocks (`proof`) are first-class language
+
+⏺ Fix #4: Define () as the Void literal
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line, removed 1 line
+      119  | `Num`  | Arbitrary-precision number | `42`, `3.14`, `-7`, `1_000` |
+      120  | `Text` | UTF-8 string               | `"hello"`, `"line\n"`       |
+      121  | `Bool` | Boolean                    | `true`, `false`             |
+      122 -| `Void` | No meaningful value        | (no literal)                |
+      122 +| `Void` | No meaningful value        | `()`                        |
+      123
+      124  `Num` is a unified numeric type. The interpreter uses integers when possible and
+      125  floats when necessary. Integer division is performed with `//` (floor division),
+
+⏺ Add () to the literals section too:
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line
+      189  "value is {x + 1}"   -- Text with interpolation
+      190  true                  -- Bool
+      191  false                 -- Bool
+      192 +()                    -- Void (unit value)
+      193  [1, 2, 3]             -- List[Num]
+      194  #{"a": 1}             -- Map[Text, Num]
+      195  (1, "hello")          -- (Num, Text) tuple
+
+⏺ Fix #5: Allow .. without binding in rest patterns
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line, removed 1 line
+      415  | `[]`                     | Empty list                                   |
+      416  | `[a, b, c]`              | List of exactly 3 elements                   |
+      417  | `[head, ..tail]`         | List with at least 1 element, rest as `tail` |
+      418 -| `[_, ..tail]`            | Same, discarding the head                    |
+      418 +| `[head, ..]`             | List with at least 1 element, rest discarded |
+      419  | `#{"key": v}`            | Map containing "key", binds value to `v`     |
+      420  | `ShapeName { field: p }` | Shape with field matching pattern `p`        |
+      421  | `some(x)`                | Option containing a value                    |
+
+⏺ Fix #1, #2, #3: Fix grammar — add missing productions, make with_expr reachable, fix () and ..
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 21 lines, removed 4 lines
+      981  declaration      ::= fn_decl | shape_decl | module_decl | use_decl
+      982                     | biject_decl | proof_decl | type_decl | expression
+      983
+      984 +annotation       ::= '@' IDENT STRING
+      985  fn_decl          ::= annotation* 'fn' IDENT type_params? '(' params ')'
+      986                       ('->' type)? contract* 'do' block 'end'
+      987  contract         ::= 'require' expression | 'ensure' expression
+     ...
+      1007
+      1008  type_decl        ::= 'type' IDENT type_params? '=' type
+      1009
+      1010 +type             ::= dotted_name type_args?
+      1011 +                   | '(' type (',' type)+ ')'
+      1012 +                   | '(' params ')' '->' type
+      1013 +                   | '(' ')'
+      1014 +type_args        ::= '[' type (',' type)* ']'
+      1015 +
+      1016  expression       ::= pipeline
+      1017  pipeline         ::= conditional (('|>' | '|?>') pipe_target)*
+      1018  pipe_target      ::= dotted_name call_args?
+      1019                     | dotted_name trailing_block
+      1020 +                   | with_expr
+      1021  dotted_name      ::= IDENT ('.' IDENT)*
+      1022 +call_args        ::= '(' (expression (',' expression)*)? ')'
+      1023  conditional      ::= or_expr
+      1024  or_expr          ::= and_expr ('or' and_expr)*
+      1025  and_expr         ::= comparison ('and' comparison)*
+      1026  comparison       ::= range_expr (comp_op range_expr)?
+      1027 +comp_op          ::= '==' | '!=' | '<' | '>' | '<=' | '>='
+      1028  range_expr       ::= addition (('to' | 'until') addition)?
+      1029  addition         ::= multiplication (('+' | '-' | '++') multiplication)*
+      1030  multiplication   ::= unary (('*' | '/' | '//' | '%') unary)*
+      1031  unary            ::= ('-' | 'not') unary | postfix
+      1032  postfix          ::= primary ('.' IDENT | '[' expression ']' | call_args)*
+      1033  primary          ::= literal | IDENT | '(' expression ')' | block_expr
+      1024 -                   | match_expr | lambda | list | map | tuple
+      1034 +                   | match_expr | lambda | list | map | tuple | void_lit
+      1035
+      1036 +literal          ::= NUM | STRING | 'true' | 'false' | 'none'
+      1037 +void_lit         ::= '(' ')'
+      1038 +list             ::= '[' (expression (',' expression)*)? ']'
+      1039 +map              ::= '#{' (STRING ':' expression (',' STRING ':' expression)*)? '}'
+      1040 +tuple            ::= '(' expression ',' expression (',' expression)* ')'
+      1041 +
+      1042  match_expr       ::= 'match' expression? case_clause+
+      1043                       ('else' '=>' expression)? 'end'
+      1044  case_clause      ::= 'case' pattern ('when' expression)? '=>' expression
+     ...
+      1046  pattern          ::= literal | IDENT | '_'
+      1047                     | list_pattern | map_pattern | shape_pattern
+      1048                     | option_pattern | result_pattern | tuple_pattern
+      1033 -list_pattern     ::= '[' (pattern (',' pattern)* ('..' IDENT)?)? ']'
+      1049 +list_pattern     ::= '[' (pattern (',' pattern)* ('..' IDENT?)?)? ']'
+      1050  map_pattern      ::= '#{' STRING ':' pattern (',' STRING ':' pattern)* '}'
+      1051 +shape_pattern    ::= IDENT '{' IDENT ':' pattern (',' IDENT ':' pattern)* '}'
+      1052 +option_pattern   ::= 'some' '(' pattern ')' | 'none'
+      1053 +result_pattern   ::= 'ok' '(' pattern ')' | 'err' '(' pattern ')'
+      1054  tuple_pattern    ::= '(' pattern ',' pattern (',' pattern)* ')'
+      1055
+      1056  lambda           ::= param_list '=>' expression
+     ...
+      1061  with_expr        ::= 'with' '(' with_arg (',' with_arg)* ')'
+      1062  with_arg         ::= IDENT ':' expression
+      1063
+      1045 -tuple            ::= '(' expression ',' expression (',' expression)* ')'
+      1046 -
+      1064  block_expr       ::= 'do' block 'end'
+      1065  block            ::= statement*
+      1066  statement        ::= 'let' 'mut'? IDENT (':' type)? '=' expression
+
+⏺ Fix #7: Add tuples to tutorial Section 2
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(docs/tutorial.md)
+  ⎿  Added 10 lines
+      53  ```
+      54  let numbers = [1, 2, 3, 4, 5]             -- List[Num]
+      55  let config = #{"host": "localhost", "port": "8080"}  -- Map[Text, Text]
+      56 +let pair = (3, "hello")                    -- (Num, Text) tuple
+      57  ```
+      58
+      59  Lists and maps are immutable. Operations on them return new values:
+     ...
+      63  -- numbers is still [1, 2, 3, 4, 5]
+      64  ```
+      65
+      66 +Tuples are fixed-size groups of values that can have different types. They're useful
+      67 +for returning multiple values from a function or grouping related data without
+      68 +defining a shape. Destructure them in patterns or lambda parameters:
+      69 +
+      70 +```
+      71 +let (x, y) = pair               -- x is 3, y is "hello"
+      72 +[(1, "a"), (2, "b")] |> each((n, s) => print("{n}: {s}"))
+      73 +```
+      74 +
+      75  ### String Interpolation
+      76
+      77  Expressions inside `{}` in strings are evaluated:
+
+⏺ Now let me verify the [top, ..] pattern in the tutorial is consistent with the grammar fix (I changed '..' IDENT to
+  '..' IDENT? making the identifier optional):
+
+⏺ Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Good — [top, ..] now matches the grammar's '..' IDENT? (optional identifier). Let me do a final quick check on both
+  files to make sure everything is consistent.
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ All uses of () are now consistent — it's the Void literal where used as a value (line 192, 247), and part of function
+  type signatures / lambda syntax elsewhere.
+
+  Here's a summary of all fixes:
+
+  1. with_expr now reachable — Added as a pipe_target alternative, so value |> with(field: x) parses correctly.
+  2. option_pattern, result_pattern, shape_pattern defined — Added full productions for all three.
+  3. Previously undefined productions now defined — Added annotation, type, type_args, call_args, comp_op, literal,
+  void_lit, list, map to the grammar.
+  4. () is now the Void literal — Updated the primitive types table, added to literals section, added void_lit
+  production in grammar.
+  5. Rest pattern .. without binding allowed — Changed '..' IDENT to '..' IDENT? in list_pattern, matching the
+  tutorial's [top, ..] usage.
+  6. Principle 2 wording fixed — Changed "no if, else, switch, or cond" to "no if/else statement, no switch, no cond" to
+   avoid contradiction with the else keyword in match expressions.
+  7. Tuples introduced in tutorial — Added tuple example to Section 2 (Collections) with destructuring example, so
+  readers see them before they appear in later code.
+
+✻ Churned for 1m 20s
+
+❯ You should probably review again for all things. Completeness, correctness, proper formatting.
+
+⏺ Read 2 files (ctrl+o to expand)
+
+⏺ I found four remaining issues. All are in the grammar and its interaction with prose/tutorial examples.
+
+  Issue 1: type production has '(' ')' — nobody writes () as a type; the type name is Void.
+
+  Issue 2: with_expr is only reachable from pipe_target, so let x = with(alice, age: 31) (documented in Section 8.4)
+  can't parse. Needs to also be in primary.
+
+  Issue 3: with_expr grammar doesn't support the direct call form with(alice, age: 31) — the explicit subject isn't
+  accounted for.
+
+  Issue 4: Tutorial line 71 has let (x, y) = pair (pattern destructuring in let), but the grammar's statement only
+  allows 'let' 'mut'? IDENT ... — no patterns. Spec Section 4.3 also doesn't mention this.
+
+  Let me fix all four.
+
+⏺ Update(docs/specification.md)
+  ⎿  Removed 1 line
+      1010  type             ::= dotted_name type_args?
+      1011                     | '(' type (',' type)+ ')'
+      1012                     | '(' params ')' '->' type
+      1013 -                   | '(' ')'
+      1013  type_args        ::= '[' type (',' type)* ']'
+      1014
+      1015  expression       ::= pipeline
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line
+      1031  postfix          ::= primary ('.' IDENT | '[' expression ']' | call_args)*
+      1032  primary          ::= literal | IDENT | '(' expression ')' | block_expr
+      1033                     | match_expr | lambda | list | map | tuple | void_lit
+      1034 +                   | with_expr
+      1035
+      1036  literal          ::= NUM | STRING | 'true' | 'false' | 'none'
+      1037  void_lit         ::= '(' ')'
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line, removed 1 line
+      1058  trailing_block   ::= 'do' '|' params '|' block 'end'
+      1059  param_list       ::= IDENT | '(' params ')' | '(' ')'
+      1060
+      1061 -with_expr        ::= 'with' '(' with_arg (',' with_arg)* ')'
+      1061 +with_expr        ::= 'with' '(' (expression ',')? with_arg (',' with_arg)* ')'
+      1062  with_arg         ::= IDENT ':' expression
+      1063
+      1064  block_expr       ::= 'do' block 'end'
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 1 line, removed 1 line
+      1063
+      1064  block_expr       ::= 'do' block 'end'
+      1065  block            ::= statement*
+      1066 -statement        ::= 'let' 'mut'? IDENT (':' type)? '=' expression
+      1066 +statement        ::= 'let' 'mut'? pattern (':' type)? '=' expression
+      1067                     | IDENT '<-' expression
+      1068                     | 'assert' expression
+      1069                     | 'return' expression
+
+⏺ Now add a note about pattern destructuring in let to spec Section 4.3:
+
+⏺ Update(docs/specification.md)
+  ⎿  Added 10 lines
+      222
+      223  Attempting to mutate an immutable binding is a compile-time error.
+      224
+      225 +Bindings can destructure values using any pattern from Section 6.3:
+      226 +
+      227 +```
+      228 +let (x, y) = get_position()
+      229 +let [first, ..rest] = items
+      230 +let some(value) = maybe_value    -- panics if none
+      231 +```
+      232 +
+      233 +The `mut` modifier is only valid with a simple identifier pattern.
+      234 +
+      235  ### 4.4 Block Expressions
+      236
+      237  A `do...end` block is an expression that evaluates to its last expression:
+
+⏺ Now let me verify the final state of the grammar section is correct and consistent:
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Grammar looks good. Let me also verify the Section 4.3 addition reads well in context:
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Everything looks clean and consistent. Here's a summary of the four fixes:
+
+  1. Removed '(' ')' from type production — Void is the type name; () is only the value literal.
+  2. Added with_expr to primary — so with(alice, age: 31) can be used outside pipelines (as documented in Section 8.4).
+  3. Updated with_expr to 'with' '(' (expression ',')? with_arg ... ')' — supports both pipeline form |> with(age: 31)
+  (subject piped in) and direct form with(alice, age: 31) (subject as first arg).
+  4. Changed let in statement from IDENT to pattern — supports let (x, y) = pair as used in the tutorial. Added
+  corresponding prose and examples to spec Section 4.3.
+
+✻ Sautéed for 3m 13s
+
+❯ /exit
+  ⎿  Goodbye!
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle)
+
+Resume this session with:
+claude --resume d075f932-9c2a-4253-ba7e-d073a347ac1d
