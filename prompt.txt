@@ -1,0 +1,16 @@
+I would like you to develop a novel scripting language called "NovelScript".
+
+Requirements:
+* You may use any language or tools you'd like to develop it. If you need tools that aren't installed, you may either install them in this project, or ask me to install them system-wide.
+* There should be an interpreter that can be used on either OS X or Linux. This can be built however you want so long as instructions are provided on how to build or run it on both systems.
+  * The language should be novel. It should not be a copy of any existing programming langauge.
+* The primary goal of the language is to make it extremely easy for agents like claude to develop for it. Human readability is secondary, but source code should be human readable (i.e. in ascii)
+  * If you can come up with novel ideas for how to accomplish tasks that are different from known programming languages, please use them, especially if they offer benefits not found in other languages.
+  * The language should be documented, and there should be a simple tutorial that's good enough for experienced programmers to get started.
+  * You should create a demonstration program to show off how things can be done or the features of the language. You decide the level of functionality needed to demonstrate this.
+
+  Do you have any clarification questions?
+
+  To start, I'd like to see a language specification and the tutorial. No need to do actual development yet until you're happy with the language.
+
+

@@ -1,0 +1,135 @@
+$ claude
+
+╭─── Claude Code v2.1.63 ───────────────────────────────────────────────────────────────────────╮
+│                           │ Tips for getting started                                          │
+│     Welcome back Fred!    │ Run /init to create a CLAUDE.md file with instructions for Claude │
+│                           │ ───────────────────────────────────────────────────────────────── │
+│                           │ Recent activity                                                   │
+│          ▐▛███▜▌          │ No recent activity                                                │
+│         ▝▜█████▛▘         │                                                                   │
+│           ▘▘ ▝▝           │                                                                   │
+│   Opus 4.6 · Claude Pro   │                                                                   │
+│     ~/src/novelscript     │                                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────╯
+
+❯ I would like you to develop a novel scripting language called "NovelScript".
+
+Requirements:
+* You may use any language or tools you'd like to develop it. If you need tools that aren't installed, you may
+either install them in this project, or ask me to install them system-wide.
+* There should be an interpreter that can be used on either OS X or Linux. This can be built however you want so
+long as instructions are provided on how to build or run it on both systems.
+* The language should be novel. It should not be a copy of any existing programming langauge.
+  * The primary goal of the language is to make it extremely easy for agents like claude to develop for it. Human
+readability is secondary, but source code should be human readable (i.e. in ascii)
+  * If you can come up with novel ideas for how to accomplish tasks that are different from known programming
+  languages, please use them, especially if they offer benefits not found in other languages.
+  * The language should be documented, and there should be a simple tutorial that's good enough for experienced
+  programmers to get started.
+  * You should create a demonstration program to show off how things can be done or the features of the language.
+  You decide the level of functionality needed to demonstrate this.
+
+  Do you have any clarification questions?
+
+  To start, I'd like to see a language specification and the tutorial. No need to do actual development yet until
+  you're happy with the language.
+
+  ⏺ I have a clear vision for this. Let me design the language and write the spec and tutorial. I'll create something with
+  genuinely novel features optimized for AI-agent authoring.
+
+⏺ Bash(mkdir -p /Users/fdamstra/src/novelscript/docs)
+  ⎿  Done
+
+⏺ Write(docs/specification.md)
+  ⎿  Wrote 996 lines to docs/specification.md
+  1 # NovelScript Language Specification
+  2
+  3 **Version 0.1 — Draft**
+  4
+  5 ## 1. Overview & Design Philosophy
+  6
+  7 NovelScript is a pipeline-oriented, pattern-driven programming language designed for
+  8 correctness and clarity. Its primary audience is AI agents generating code, with human
+  9 readability as a strong secondary goal.
+… +986 lines (ctrl+o to expand)
+
+⏺ Write(docs/tutorial.md)
+  ⎿  Wrote 671 lines to docs/tutorial.md
+  1 # NovelScript Tutorial
+  2
+  3 A hands-on introduction for experienced programmers.
+  4
+  5 ---
+  6
+  7 ## 1. Hello World
+  8
+  9 Create a file called `hello.ns`:
+… +661 lines (ctrl+o to expand)
+
+  ⏺ Both documents are ready. Here's a summary of NovelScript's key design decisions:
+
+  Genuinely Novel Features
+
+  - Bijections — Define a function and its inverse together; compose them with >>. No general-purpose language does this
+  as a first-class construct.
+  - Proof blocks — Inline tests as a language construct (not a framework). They run with your program, doubling as
+  executable documentation.
+  - Conditional pipeline |?> — Unwraps ok/some and short-circuits on err/none, eliminating nested error-handling
+  boilerplate entirely.
+  - Pattern matching as the only branching — No if/else/switch. One mechanism, always exhaustive, zero ambiguity about
+  which construct to use.
+
+  AI-Agent-Friendly Design Choices
+
+  - Pipeline-first — Left-to-right data flow is easier to generate and verify than nested calls.
+  - Contracts (require/ensure) — Agents can generate verifiable specs alongside code.
+  - @intent annotations — Machine-readable purpose declarations.
+  - Uniform syntax — Fewer special cases means fewer generation errors.
+  - No null — Eliminates an entire bug class.
+
+  Borrowed but Well-Integrated
+
+  - Immutable-by-default with explicit mut and <- mutation
+  - Structural typing via shapes
+- Stream-based iteration (no loops)
+  - Result/Option for error handling
+
+  The spec is at docs/specification.md and the tutorial at docs/tutorial.md. Take a look and let me know what you'd like
+  to change, add, or rethink before we start building the interpreter.
+
+  ✻ Churned for 6m 50s
+
+  ❯ Please createa CLAUDE.md with any notes
+
+⏺ Recalled 1 memory (ctrl+o to expand)
+
+⏺ Write(CLAUDE.md)
+  ⎿  Wrote 28 lines to CLAUDE.md
+  1 # NovelScript
+  2
+  3 A pipeline-oriented, pattern-driven programming language designed for AI agents to write, with human rea
+  dability as a secondary goal.
+  4
+  5 ## Project Structure
+  6
+  7 - `docs/specification.md` — Full language specification
+  8 - `docs/tutorial.md` — Tutorial for experienced programmers
+  9
+  10 ## Language Key Points
+… +18 lines (ctrl+o to expand)
+
+⏺ Wrote 1 memory (ctrl+o to expand)
+
+  ⏺ Created CLAUDE.md at the project root with a summary of the language, project structure, key design points, and
+  current status.
+
+  ❯ /exit
+  ⎿  Goodbye!
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ❯
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+⏵⏵ accept edits on (shift+tab to cycle)
+
+  Resume this session with:
+  claude --resume 99607ba3-877a-4846-ade4-ffb6561a2c1a
