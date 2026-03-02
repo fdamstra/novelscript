@@ -8,9 +8,21 @@ Additionally, select questions and answers were done in the conversations in [co
 
 ## First Phase
 
+### Initial conversation
+
 For the first phase, I just asked it to design the language, and it generated:
 
-    [A specifications document](docs/specification.md)
-[A tutorial](docs/tutorial.md)
+* [A specifications document](docs/specification.md)
+* [A tutorial](docs/tutorial.md)
 
-    I did have to ask it to create the CLAUDE.md file.
+I did have to ask it to create the CLAUDE.md file.
+
+### Second conversation
+
+I guided it to add an appropriate license.
+
+### Third Conversation
+
+There were some obvious errors in the spec and the tutorial, especially with respect to formatting. I asked it to review for correctness and completeness. I repeated this multiple times.
+
+
